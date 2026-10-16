@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.0",
+  "id": "matter_xxx",
+  "mode": "simple",
+  "mode_source": "auto",
+  "complexity_score": 0.2,
+  "detected_features": ["has_deadline"],
+  "enabled_sections": ["summary", "schedule", "source"],
+
+  "title": "事项名称",
+  "target": {
+    "type": "student",
+    "name": "2026级本科生",
+    "ids": []
+  },
+  "background": "事项背景",
+  "category": "报名",
+  "priority": "medium",
+  "tags": [],
+  "status": "not_started",
+  "status_source": "auto",
+  "timezone": "Asia/Shanghai",
+  "created_at": "2026-10-16T10:00:00+08:00",
+  "updated_at": "2026-10-16T10:00:00+08:00",
+
+  "owner": { "id": "u1", "name": "张三" },
+  "assignees": [{ "id": "u2", "name": "李四" }],
+  "participants": [],
+  "contact": { "name": "王老师", "phone": "", "email": "" },
+
+  "deadline": {
+    "scope": "overall",
+    "label": "截止时间",
+    "start_at": "2026-10-20T09:00:00+08:00",
+    "due_at": "2026-10-25T18:00:00+08:00",
+    "end_at": null,
+    "all_day": false,
+    "source_ref": {}
+  },
+
+  "reminders": [
+    {
+      "reminder_id": "rem_1",
+      "offset_minutes": 120,
+      "channels": ["app", "email"],
+      "enabled": true,
+      "recipients": [],
+      "repeat": null,
+      "calendar_uid": null
+    }
+  ],
+  "recurrence": null,
+
+  "default_location": {
+    "type": "online",
+    "name": "行政楼302",
+    "address": "",
+    "room": "302",
+    "url": "",
+    "map_url": "",
+    "source_ref": {}
+  },
+
+  "key_points": ["需本人签字", "用黑色签字笔"],
+
+  "attachments": [
+    {
+      "attachment_id": "att_1",
+      "attachment_name": "奖学金报名表模板.pdf",
+      "attachment_url": "https://.../baomingbiao.pdf",
+      "attachment_type": "file",
+      "mime_type": "application/pdf",
+      "size": 102400,
+      "checksum": "sha256:xxx",
+      "access_level": "public",
+      "expire_at": null,
+      "source_ref": {}
+    }
+  ],
+
+  "materials": [
+    {
+      "material_id": "mat_1",
+      "material_name": "报名表",
+      "material_desc": "需本人签字",
+      "required_by_source": true,
+      "material_type": "required",
+      "status": "pending",
+      "template_attachment_id": "att_1",
+      "submitted_attachment_ids": [],
+      "review_status": null,
+      "source_ref": {}
+    }
+  ],
+
+  "step_list": [
+    {
+      "step_id": "step_1",
+      "parent_id": null,
+      "order": 1,
+      "title": "步骤名称",
+      "desc": "步骤概述",
+      "status": "not_started",
+
+      "start_at": null,
+      "due_at": null,
+      "due_at_inherited_from": "overall",
+      "reminders": [],
+
+      "location": null,
+      "key_points": [],
+      "materials": [],
+      "attachments": [],
+
+      "dependencies": [
+        { "type": "finish_to_start", "step_id": "step_0" }
+      ],
+      "parallel": false,
+      "condition": null,
+      "owner": null,
+      "assignees": [],
+      "review": {
+        "required": false,
+        "reviewer": null,
+        "status": null
+      },
+
+      "sub_step_list": [
+        {
+          "sub_step_id": "sub_1_1",
+          "parent_id": "step_1",
+          "order": 1,
+          "title": "子任务名称",
+          "desc": "具体怎么做",
+          "status": "not_started",
+          "start_at": null,
+          "due_at": null,
+          "due_at_inherited_from": null,
+          "reminders": [],
+          "location": null,
+          "key_points": [],
+          "materials": [],
+          "attachments": [],
+          "dependencies": [],
+          "parallel": false,
+          "condition": null,
+          "owner": null,
+          "assignees": [],
+          "review": {
+            "required": false,
+            "reviewer": null,
+            "status": null
+          },
+          "source_ref": {}
+        }
+      ],
+      "source_ref": {}
+    }
+  ],
+
+  "warning_list": [
+    {
+      "warning_id": "warn_1",
+      "warning_type": "time_conflict",
+      "mode_scope": "complex",
+      "severity": "high",
+      "message": "步骤②和③时间紧，建议提前准备缴费",
+      "rule": {
+        "start": null,
+        "end": null,
+        "related_step_ids": ["step_2", "step_3"],
+        "related_material_ids": []
+      },
+      "action": {
+        "type": "reschedule",
+        "suggestion": "建议提前到10月24日完成"
+      },
+      "related_refs": []
+    }
+  ],
+
+  "permissions": {
+    "visibility": "internal",
+    "viewers": [],
+    "editors": [],
+    "submitters": []
+  },
+  "audit_log": [],
+  "comments": [],
+
+  "sources": [
+    {
+      "doc_id": "doc_1",
+      "doc_version": "v1",
+      "page": 1,
+      "anchor_id": "sec-1",
+      "char_start": 100,
+      "char_end": 140,
+      "quote": "请于10月25日18:00前提交",
+      "chunk_id": "chunk_1",
+      "bbox": [100, 200, 300, 250]
+    }
+  ]
+}

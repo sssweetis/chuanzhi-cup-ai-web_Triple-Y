@@ -1,0 +1,36 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===== 虚拟环境 =====
+venv/
+.venv/
+env/
+ENV/
+
+# ===== 环境变量与密钥（重要！） =====
+.env
+*.key
+*.pem
+secrets.json
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== 日志与输出 =====
+*.log
+logs/
+output_*.txt
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db

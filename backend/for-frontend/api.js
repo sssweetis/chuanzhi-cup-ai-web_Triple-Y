@@ -61,3 +61,35 @@ export async function analyzeNotice(text, { timeoutMs = 90000 } = {}) {
 }
 
 export const API_BASE_URL = BASE_URL;
+
+/**
+ * 用户情况核对（10/18 里程碑）：把用户勾选/自述的情况和 Matter 放在一起，返回「还缺什么」
+ * @param {{matter?: object, text?: string, checkedMaterialIds?: string[], profile?: object, profileChecks?: object[]}} params
+ * @returns {Promise<{ok: true, data: object} | {ok: false, error: string}>}
+ *          data.missing_required / data.need_confirm / data.profile_issues / data.ready / data.ready_ratio / data.summary
+ */
+export async function checkRequirements({ matter, text, checkedMaterialIds = [], profile = {}, profileChecks, timeoutMs = 30000 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const payload = { checked_material_ids: checkedMaterialIds, profile };
+    if (matter) payload.matter = matter;
+    else if (text) payload.text = text;
+    if (profileChecks) payload.profile_checks = profileChecks;
+
+    const res = await fetch(`${BASE_URL}/api/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const body = await res.json();
+    if (!body.success) return { ok: false, error: body.error || "核对失败" };
+    return { ok: true, data: body.data };
+  } catch (e) {
+    if (e.name === "AbortError") return { ok: false, error: `核对超时（> ${timeoutMs / 1000}s）` };
+    return { ok: false, error: `连不上后端服务（${BASE_URL}）` };
+  } finally {
+    clearTimeout(timer);
+  }
+}

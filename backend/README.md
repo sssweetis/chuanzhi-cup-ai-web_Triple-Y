@@ -15,6 +15,9 @@ backend/
 ├── check_env.py              # C：服务端环境自检（Python/依赖/.env/模式/端口/链路）
 ├── test_llm.py               # C：大模型密钥连通性验证（真实调用 / --mock 离线）
 ├── smoke_test.py             # C：接口自测 10 项（只看标准库）
+├── smoke_test_check.py       # C：/api/check 用户情况核对自测（10 项）
+├── requirement_checker.py   # C：缺项核对规则（10/18 里程碑，纯确定性逻辑）
+├── check_sync.py            # C：核对 backend/ 与 src/ 的抽取模块是否同步
 ├── configure_env.ps1 / .sh   # C：交互式配置 .env（隐藏输入密钥）
 ├── for-frontend/             # C：给 B 的接入包（api.js + env.example）
 ├── requirements.txt          # 运行时依赖
@@ -84,6 +87,7 @@ python main.py
 | --- | --- |
 | `GET /health` | `{"status":"ok","mode":"mock"或"real"}` |
 | `POST /api/analyze` | `{"text":"通知原文"}` → `{"success":bool,"data":Matter JSON 或 null,"error":str 或 null}` |
+| `POST /api/check` | 用户情况核对：传 `matter`（或 `text`）+ `checked_material_ids` + `profile` → 返回还缺哪些材料、哪些需要确认（纯规则，不调用模型） |
 | `GET /` | 服务信息（演示用） |
 | `GET /docs` | 自动生成的接口文档 |
 
@@ -273,3 +277,76 @@ A-样本3 complex  -> mode=complex   score=0.9
 
 当前按 **3000 字符上限** 落地，留了开关：`.env` 里 `MAX_TEXT_LENGTH=10000`（或 `0` 不限制）即可切换成 A 清单的行为。
 请 A/B 确认最终策略，确认后我把默认值改一致。
+
+---
+
+## 12.（10/18 里程碑）用户情况核对接口 `POST /api/check`
+
+用途：把**用户填写的实际情况**（勾选了哪些材料、自述情况）和 A 抽出的 Matter 放在一起，返回「还缺什么、什么需要确认」。
+**纯规则比对，不调用大模型**，字段命名与 `/api/analyze` 完全一致。
+
+### 请求（三种用法）
+
+```json
+{
+  "matter": { "...": "上一次 /api/analyze 返回的 data（推荐，不跑模型、最快）" },
+  "text": "通知原文（没传 matter 时用它先抽一次）",
+  "checked_material_ids": ["mat_1", "mat_2"],
+  "profile": { "has_video": false, "people_count": 3 },
+  "profile_checks": [ { "key": "has_video", "label": "视频材料", "keywords": ["视频"], "message": "原文要求提交视频，你说还没准备" } ]
+}
+```
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `matter` | 二选一 | 直接传上次的解析结果 → 不跑模型；与 `text` 同时传时以 `matter` 为准 |
+| `text` | 二选一 | 通知原文，服务端先跑 `/api/analyze` 再核对（同样受 3000 字上限约束） |
+| `checked_material_ids` | 否 | 用户勾选「已准备好」的材料 ID（也接受材料名，容错） |
+| `profile` | 否 | 用户自述情况，如 `{"has_video": false}` |
+| `profile_checks` | 否 | 自定义自述核对规则；不传则用 `requirement_checker.DEFAULT_PROFILE_CHECKS` |
+
+### 响应
+
+```json
+{
+  "success": true,
+  "error": null,
+  "data": {
+    "matter": { "...": "原样回显 A 的 Matter JSON" },
+    "mode": "standard",
+    "required_total": 2,
+    "checked": [{ "material_id": "mat_1", "material_name": "报名表", "material_type": "required", "required_by_source": true }],
+    "missing_required": [{ "material_id": "mat_2", "material_name": "成绩单", "material_type": "required", "required_by_source": false }],
+    "missing_optional": [],
+    "unchecked_unspecified": [],
+    "need_confirm": [{ "item": "截止时间", "reason": "原文未识别到明确截止时间，建议向发布方确认" }],
+    "profile_issues": [],
+    "ready": false,
+    "ready_ratio": 0.5,
+    "summary": "还缺 1 项必交材料：成绩单"
+  }
+}
+```
+
+字段含义：
+
+| 字段 | 说明 |
+| --- | --- |
+| `missing_required` | **必交**材料里用户还没勾选的（`material_type=required` 或 `required_by_source=true`） |
+| `missing_optional` | 可选材料里还没勾选的 |
+| `unchecked_unspecified` | 原文没明确是否必交的材料 |
+| `need_confirm` | 原文没写清、需要用户去问发布方的（如没有截止时间） |
+| `profile_issues` | 用户自述情况与原文要求的冲突（如原文要视频、用户说没有） |
+| `ready` / `ready_ratio` | 必交清单是否齐全 + 完成比例，可直接做进度条 |
+| `summary` | 一句话结论文案，可直接展示 |
+
+### 自测
+
+```powershell
+python smoke_test_check.py            # 10 项
+python smoke_test_check.py http://127.0.0.1:8123
+```
+
+> 说明：`profile` 的判定规则表是 C 侧的兜底实现（`requirement_checker.DEFAULT_PROFILE_CHECKS`）。
+> A 定稿核对规则后，替换规则表或由前端传 `profile_checks` 即可，不需要改接口结构。
+

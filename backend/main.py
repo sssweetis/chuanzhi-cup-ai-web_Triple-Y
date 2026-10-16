@@ -22,7 +22,7 @@ C 的后端入口（FastAPI）—— 通知抽取服务
 
 import logging
 import os
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
@@ -39,6 +39,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from notification_extractor import LLM_ENABLE_MOCK  # noqa: E402
 from service import analyze_notification  # noqa: E402
+from requirement_checker import check_requirements  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -150,6 +151,62 @@ def analyze(req: AnalyzeRequest):
 
     # 3) 交给 A 的抽取服务（不改动其内部逻辑）
     return analyze_notification(text)
+
+
+# ==================== 10/18：用户情况核对（缺项核对）====================
+
+class CheckRequest(BaseModel):
+    """
+    用户情况核对请求，三种用法：
+      1) 传 matter（上次 /api/analyze 的 data）+ 勾选状态 → 不跑模型，最快
+      2) 传 text（通知原文）+ 勾选状态 → 服务端先抽取一次再核对
+      3) 再传 profile（用户自述，如 {"has_video": false}）→ 核对自述与原文要求是否冲突
+    """
+
+    matter: Optional[dict] = None
+    text: Optional[str] = None
+    checked_material_ids: Optional[List[str]] = None
+    profile: Optional[Dict[str, Any]] = None
+    profile_checks: Optional[List[dict]] = None
+
+
+@app.post("/api/check", response_model=AnalyzeResponse)
+def check(req: CheckRequest):
+    """
+    输入：{ "matter": {...} 或 "text": "通知原文", "checked_material_ids": [...], "profile": {...} }
+    输出：{ "success": true, "data": { "matter": {...}, "missing_required": [...], "summary": "..." }, "error": null }
+
+    纯规则比对，不调用大模型；不修改 /api/analyze 的字段命名与结构。
+    """
+    matter = req.matter
+    notice_text = (req.text or "").strip()
+
+    if matter is None:
+        if not notice_text:
+            return _fail("请提供通知原文（text）或已解析结果（matter）")
+        if 0 < MAX_TEXT_LENGTH < len(notice_text):
+            return _fail(f"通知过长，当前{len(notice_text)}字符，上限{MAX_TEXT_LENGTH}")
+        result = analyze_notification(notice_text)
+        if not result.get("success"):
+            return result
+        matter = result.get("data")
+
+    if not isinstance(matter, dict) or not matter:
+        return _fail("matter 必须是 /api/analyze 返回的 data 对象")
+
+    try:
+        detail = check_requirements(
+            matter,
+            checked_material_ids=req.checked_material_ids,
+            profile=req.profile,
+            profile_checks=req.profile_checks,
+            notice_text=notice_text,
+        )
+    except Exception as e:  # 兜底：核对出错也不影响前端拿到原始 matter
+        logger.exception("核对异常：%s", e)
+        return _fail(f"核对异常：{e}")
+
+    return {"success": True, "data": {"matter": matter, **detail}, "error": None}
 
 
 # ==================== 统一错误兜底 ====================

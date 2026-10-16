@@ -3,7 +3,7 @@
 
   用法：
     powershell -ExecutionPolicy Bypass -File .\configure_env.ps1
-    powershell -ExecutionPolicy Bypass -File .\configure_env.ps1 -ApiKey sk-xxx -BaseUrl https://api.deepseek.com/v1 -Model deepseek-chat -Port 8000
+    powershell -ExecutionPolicy Bypass -File .\configure_env.ps1 -ApiKey "<你的APIKey>" -BaseUrl "https://你的平台接口地址/v1" -Model "<模型名>" -Port 8000
 
   说明：
     · 密钥只写到本地 .env（已被 .gitignore 忽略），不会进 Git、不会打印完整内容

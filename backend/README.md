@@ -176,14 +176,14 @@ powershell -ExecutionPolicy Bypass -File .\configure_env.ps1
 会依次问你 API Key（**隐藏输入，不回显**）、Base URL、模型名、端口，然后写进 `.env`；配了 Key 默认把 `LLM_ENABLE_MOCK` 置 0。也可以一次性传参：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\configure_env.ps1 -ApiKey sk-xxx -BaseUrl https://api.deepseek.com/v1 -Model deepseek-chat -Port 8000
+powershell -ExecutionPolicy Bypass -File .\configure_env.ps1 -ApiKey "<你的APIKey>" -BaseUrl "https://你的平台接口地址/v1" -Model "<模型名>" -Port 8000
 ```
 
 ### 方式二：手改 `.env`
 
 ```env
 LLM_ENABLE_MOCK=0
-LLM_API_KEY=sk-xxxxxxxx
+LLM_API_KEY=<在此填入你的APIKey>
 LLM_BASE_URL=https://api.openai.com/v1   # 用国内平台就换成对应地址
 LLM_MODEL=gpt-4o                         # 与平台匹配的模型名
 PORT=8000
@@ -192,7 +192,7 @@ PORT=8000
 ### 方式三：系统环境变量（比赛演示机器不想留 .env 文件时）
 
 ```powershell
-$env:LLM_API_KEY="sk-xxxxxxxx"; $env:LLM_MODEL="gpt-4o"; python -m uvicorn main:app --port 8000
+$env:LLM_API_KEY="<在此填入你的APIKey>"; $env:LLM_MODEL="gpt-4o"; python -m uvicorn main:app --port 8000
 ```
 
 ### 验证密钥是否真的能用

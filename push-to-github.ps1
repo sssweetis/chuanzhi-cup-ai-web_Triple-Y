@@ -183,7 +183,8 @@ if (-not $useHttps) {
         Write-Host ""
         Write-Host ("  " + (Get-Content -LiteralPath "$keyPath.pub" -Raw).Trim()) -ForegroundColor White
         Write-Host ""
-        Write-Host "  4) 注意要加到 sssweetis 这个账号下，回来按回车继续" -ForegroundColor Yellow
+        Write-Host "  4) 加到【你要用来推送的账号】下即可：团队账号最好；用个人账号也行，只要它对仓库有 Write 权限" -ForegroundColor Yellow
+        Write-Host "     （同一把公钥只能属于一个 GitHub 账号，若已加到个人账号，先去 个人账号 Settings→SSH keys 删掉再加）" -ForegroundColor DarkGray
         Read-Host "  添加完成后按回车继续" | Out-Null
         $probe = (& ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1 | Out-String)
         if ($probe -match "successfully authenticated") { Ok "SSH 认证通过" }
@@ -210,7 +211,7 @@ $push = RunGit @("push", "-u", "origin", "main")
 if ($push.Code -ne 0) {
     Bad "推送失败：`n$($push.Out)"
     Write-Host "  排查建议：" -ForegroundColor Yellow
-    Write-Host "   · 确认公钥已加到 sssweetis 账号：https://github.com/settings/keys"
+    Write-Host "   · 确认公钥已加到【用来推送的那个账号】（团队账号或你的个人账号，需仓库 Write 权限）：https://github.com/settings/keys"
     Write-Host "   · 或改用 HTTPS：powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -UseHttps"
     Write-Host "   · HTTPS 若提示连不上 github.com，说明网络被拦，开代理后重试"
     exit 1

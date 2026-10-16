@@ -1,32 +1,36 @@
-# ==================== 密钥 / 环境变量（绝对不能提交）====================
-.env
-.env.local
-.env.*.local
-.ssh/
-*.pem
-
-# ==================== Python ====================
+# ===== Python =====
 __pycache__/
 *.py[cod]
-.venv/
-venv/
-*.egg-info/
-.pytest_cache/
-
-# ==================== Node / 前端 ====================
-node_modules/
+*$py.class
+.Python
+build/
 dist/
-dist-ssr/
-.vite/
-coverage/
+*.egg-info/
+.eggs/
 
-# ==================== 编辑器 / 系统 ====================
-.vscode/
+# ===== 虚拟环境 =====
+venv/
+.venv/
+env/
+ENV/
+
+# ===== 环境变量与密钥（重要！） =====
+.env
+*.key
+*.pem
+secrets.json
+
+# ===== IDE =====
 .idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== 日志与输出 =====
+*.log
+logs/
+output_*.txt
+
+# ===== 系统文件 =====
 .DS_Store
 Thumbs.db
-*.log
-
-# ==================== 比赛官方要求原件 ====================
-# 该 docx 里混有个人信息，不上传；要点已整理到 docs/比赛要求与评分标准.md
-时间，材料，评分，环境，要求.docx

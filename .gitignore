@@ -34,3 +34,6 @@ output_*.txt
 # ===== 系统文件 =====
 .DS_Store
 Thumbs.db
+
+# ===== 本地供应商配置（含密钥，禁止提交）=====
+config_local.py

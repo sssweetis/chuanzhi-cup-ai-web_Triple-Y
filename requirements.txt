@@ -1,2 +1,12 @@
+# 全项目依赖（后端服务 + 抽取脚本）
+# 安装：pip install -r requirements.txt
+
+# ---- 抽取脚本（A 的 src/notification_extractor.py）----
 jsonschema>=4.0.0
-# openai>=1.0.0  # 联调真实 API 时，取消注释并安装
+openai>=1.0.0
+
+# ---- 后端服务（C 的 backend/，详见 backend/requirements.txt）----
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+python-dotenv>=1.0.1

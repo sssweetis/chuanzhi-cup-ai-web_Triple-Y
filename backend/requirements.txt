@@ -1,0 +1,12 @@
+# 通知抽取服务 —— 运行时依赖
+# 安装：pip install -r requirements.txt
+
+# --- Web 服务（C 的后端）---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+python-dotenv>=1.0.1
+
+# --- 抽取服务（A 的模块）---
+openai>=1.0.0
+jsonschema>=4.0.0

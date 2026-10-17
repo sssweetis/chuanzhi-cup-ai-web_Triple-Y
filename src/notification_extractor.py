@@ -204,9 +204,13 @@ class Attachment:
     @classmethod
     def from_dict(cls, d: Dict) -> "Attachment":
         src = _safe_dict(d.get("source_ref"))
+        att_name = _safe_str(d.get("attachment_name")).strip()
+        if not att_name and src:
+            att_name = _safe_str(src.get("quote"))[:8] + "..."
+        
         return cls(
             attachment_id=_safe_str(d.get("attachment_id")) or f"att_{uuid.uuid4().hex[:6]}",
-            attachment_name=_safe_str(d.get("attachment_name")),
+            attachment_name=att_name if att_name else "未命名附件",
             attachment_type=_safe_str(d.get("attachment_type"), "file"),
             source_ref=SourceRef.from_dict(src) if src else None,
         )
@@ -230,6 +234,9 @@ class Material:
     def from_dict(cls, d: Dict) -> "Material":
         src = _safe_dict(d.get("source_ref"))
         m_name = _safe_str(d.get("material_name")).strip()
+        if not m_name and src:
+            m_name = _safe_str(src.get("quote"))[:8] + "..."
+            
         return cls(
             material_id=_safe_str(d.get("material_id")) or f"mat_{uuid.uuid4().hex[:6]}",
             material_name=m_name if m_name else "未命名材料",
@@ -296,6 +303,16 @@ class Step:
         rev = _safe_dict(d.get("review"))
         sid = d.get("sub_step_id") if is_sub_step else d.get("step_id")
         if not sid: sid = d.get("step_id") or d.get("sub_step_id") or f"step_{uuid.uuid4().hex[:6]}"
+        
+        # 兼容处理：如果大模型输出了字符串数组 ["step_1"]，转成对象数组
+        raw_deps = _safe_list(d.get("dependencies"))
+        parsed_deps = []
+        for dep in raw_deps:
+            if isinstance(dep, str):
+                parsed_deps.append({"type": "finish_to_start", "step_id": dep})
+            elif isinstance(dep, dict):
+                parsed_deps.append(dep)
+
         return cls(
             step_id=_safe_str(sid),
             order=int(d.get("order", 1)),
@@ -306,7 +323,7 @@ class Step:
             due_at=d.get("due_at") if is_valid_iso(d.get("due_at")) else None,
             materials=_safe_list(d.get("materials")),
             attachments=_safe_list(d.get("attachments")),
-            dependencies=_safe_list(d.get("dependencies")),
+            dependencies=parsed_deps,
             owner=_safe_dict(d.get("owner")),
             review=Review.from_dict(rev) if rev else None,
             sub_step_list=[Step.from_dict(s, is_sub_step=True) for s in _safe_list(d.get("sub_step_list"))],
@@ -328,9 +345,13 @@ class Warning:
 
     @classmethod
     def from_dict(cls, d: Dict) -> "Warning":
+        w_type = _safe_str(d.get("warning_type"))
+        if not w_type:
+            w_type = "deadline_risk"
+            
         return cls(
             warning_id=_safe_str(d.get("warning_id")) or f"warn_{uuid.uuid4().hex[:6]}",
-            warning_type=_safe_str(d.get("warning_type")),
+            warning_type=w_type,
             mode_scope=_safe_str(d.get("mode_scope"), "complex"),
             severity=_safe_str(d.get("severity"), "medium"),
             message=d.get("message"),
@@ -401,11 +422,7 @@ class Matter:
         m.reminders = [Reminder.from_dict(r) for r in _safe_list(d.get("reminders"))]
         if _safe_dict(d.get("default_location")): m.default_location = Location.from_dict(d["default_location"])
         m.attachments = [Attachment.from_dict(a) for a in _safe_list(d.get("attachments"))]
-        
-        # 过滤掉没有名字的脏材料
-        raw_materials = _safe_list(d.get("materials"))
-        m.materials = [Material.from_dict(x) for x in raw_materials if x.get("material_name")]
-        
+        m.materials = [Material.from_dict(x) for x in _safe_list(d.get("materials"))]
         m.step_list = [Step.from_dict(s, is_sub_step=False) for s in _safe_list(d.get("step_list"))]
         m.warning_list = [Warning.from_dict(w) for w in _safe_list(d.get("warning_list"))]
         m.sources = [SourceRef.from_dict(s) for s in _safe_list(d.get("sources"))]
@@ -478,7 +495,6 @@ def validate_matter(data: Dict) -> Tuple[bool, Optional[str]]:
     except ValidationError as e:
         return False, str(e)
 
-
 class LLMClient:
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model: Optional[str] = None, timeout: int = 60):
         cfg = self._load_local_config()
@@ -512,15 +528,20 @@ class LLMClient:
                 messages=[{"role": "system", "content": system_content}, {"role": "user", "content": notification_text}],
                 temperature=0,
                 response_format={"type": "json_object"},
+                stream=True, # 开启流式输出防超时
             )
-            raw_text = response.choices[0].message.content
+            
+            raw_text = ""
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                    raw_text += chunk.choices[0].delta.content
+            
             raw = json.loads(raw_text)
             logger.info("[%s] API 完成：mode=%s", request_id, raw.get("mode"))
             return raw
         except Exception as e:
             logger.exception("[%s] LLM 调用失败：%s", request_id, e)
             raise
-
 
 @dataclass
 class ScheduledReminder:
@@ -545,7 +566,6 @@ class ReminderScheduler:
         self.jobs.extend(jobs)
         return jobs
 
-
 class MatterExtractor:
     def __init__(self, llm: LLMClient, system_prompt: str):
         self.llm = llm
@@ -554,6 +574,15 @@ class MatterExtractor:
 
     def process(self, source: str) -> Tuple[Optional[Matter], Optional[str]]:
         raw = self.llm.extract(source, self.system_prompt)
+        
+        # 数据格式容错兜底：如果大模型把 deadline 直接输出成字符串
+        if isinstance(raw.get("deadline"), str):
+            raw["deadline"] = {
+                "scope": "overall",
+                "label": "截止时间",
+                "due_at": raw["deadline"]
+            }
+
         features = _safe_list(raw.get("detected_features"))
         score = round(recompute_complexity(features), 3)
         raw["complexity_score"] = score
@@ -562,7 +591,9 @@ class MatterExtractor:
         raw = enforce_enabled_sections(raw)
 
         ok, err = validate_matter(raw)
-        if not ok: return None, f"Schema 校验失败：{err}"
+        if not ok: 
+            logger.error(f"校验失败原始数据: {json.dumps(raw, ensure_ascii=False)}")
+            return None, f"Schema 校验失败：{err}"
 
         matter = Matter.from_dict(raw)
         now_iso = datetime.now(TZ).isoformat()
@@ -573,7 +604,6 @@ class MatterExtractor:
 
         self.scheduler.schedule_from_matter(matter)
         return matter, None
-
 
 if __name__ == "__main__":
     import time
@@ -600,7 +630,6 @@ if __name__ == "__main__":
         print(f"mode={matter.mode}  score={matter.complexity_score}  sections={matter.enabled_sections}")
         print(json.dumps(matter.to_dict(), ensure_ascii=False, indent=2))
         
-        # 每跑完一个样本，休息 3 秒，防止触发供应商限流
         time.sleep(3)
 
     print("\n===== 已调度提醒 =====")

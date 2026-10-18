@@ -536,7 +536,30 @@ class LLMClient:
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                     raw_text += chunk.choices[0].delta.content
             
-            raw = json.loads(raw_text)
+            # ====== 新增：大模型输出清洗与防呆兜底 ======
+            raw_text = raw_text.strip()
+            
+            # 1. 去除 Claude 等模型爱加的 Markdown 标记
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            elif raw_text.startswith("```"):
+                raw_text = raw_text[3:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+            
+            # 2. 检查是否为空
+            if not raw_text:
+                raise ValueError("大模型返回了空内容，可能是供应商接口超时或拒绝服务")
+                
+            # 3. 解析 JSON
+            try:
+                raw = json.loads(raw_text)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON解析失败！原始返回内容：\n{raw_text}")
+                raise ValueError(f"大模型输出格式错误，无法转为JSON: {e}")
+            # ==========================================
+
             logger.info("[%s] API 完成：mode=%s", request_id, raw.get("mode"))
             return raw
         except Exception as e:

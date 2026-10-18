@@ -55,6 +55,8 @@ has_conflict / has_material_reuse
 - title: 优先使用原文标题；无标题时用"核心动作 + 核心对象"提炼，不超过 20 字。
 - reminders: 若原文有 DDL，则输出一条，offset_minutes=120，channels=["app"]；否则省略。
 - 相对时间（如"下周三"）以 NOW 为基准归一化为绝对时间，格式 ISO 8601 + +08:00。
+- **任务主体识别（极度重要）**：只提取面向用户（如“学生”、“参赛者”、“团队”）的任务和步骤。如果原文提到“各学院需组织...”、“教务处负责审核...”这类明显不属于个人用户的动作，**绝对不要**提取到 step_list 中。
+- **source_ref 必填（极度重要）**：无论文本长短，提取出的每一个材料、每一个步骤，都必须带上 source_ref 和 quote 原文引用，绝对不允许为空！
 
 # 字段互斥规则 (最重要)
 - simple 模式禁止出现: owner, assignees, participants, contact, default_location, key_points, attachments, materials, step_list, warning_list, permissions, audit_log, comments, recurrence。
@@ -78,13 +80,15 @@ quote 必填，其余可为空。
 - 空数组 / 空对象一律省略，不要输出 [] 或 {}。
 - 禁止编造任何原文没有的信息。
 
+# 缺失信息处理规则（极度重要）
+- 如果原文中完全没有提及【截止时间】（deadline），绝对不能自己编造日期！必须在 warning_list 中增加一条：{"warning_type": "missing_information", "message": "原文未提及截止时间，请手动确认"}。
+- 如果原文中缺失了重要的资格限制（如年级、专业），或者在 eligibility 中无法确定，同样在 warning_list 中输出 missing_information。
+
 # 输入通知
 ---
 {{USER_NOTIFICATION_TEXT}}
 ---
 """
-
-# src/prompt.py 底部追加
 
 QA_PROMPT = r"""
 # Role
@@ -95,6 +99,7 @@ QA_PROMPT = r"""
 2. 如果用户问的信息（如人数、奖金）在原文中完全没有，请回答：“原文未提及相关信息”。
 3. **允许进行合理的逻辑推断**：如果原文中包含条件关系（例如“如果A，则必须B”或“通过A的，需交B”），你可以根据条件推导结论。但必须在回答中说明你是基于哪条原文推断的。
 4. 绝对禁止使用你自己的外部常识（比如自己去猜一般比赛是几个人）。
+5. **就事论事，不要发散**：如果用户仅针对某特定事项（如某一份材料或某一步骤）提问，请直接依据当前清单状态回答，**不要主动去推测或补充其他不相关的任务**。
 
 # 示例
 - 原文：“通过初审的团队，需交纸质表。”

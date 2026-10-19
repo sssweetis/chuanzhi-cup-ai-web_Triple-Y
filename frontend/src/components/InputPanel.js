@@ -50,12 +50,17 @@ export function renderInputPanel(mount) {
       const data = await analyzeNotification(text)
       setState({ analyzing: false, analyzeResult: data })
     } catch (err) {
-      setState({ analyzing: false, analyzeError: err.message || '网络异常' })
+      const tip = /连不上后端|Failed to fetch|NetworkError/i.test(String(err))
+        ? '后端服务还没启动，可以先点下面三个示例按钮看效果'
+        : (err.message || '网络异常')
+      setState({ analyzing: false, analyzeError: tip })
     }
     paint()
   }
 
   mount.querySelector('#analyzeBtn').onclick = runAnalyze
+  mount.querySelector('#taskInput').value = localStorage.getItem('zhiban-input') || ''
+  mount.querySelector('#taskInput').oninput = (e) => localStorage.setItem('zhiban-input', e.target.value)
   mount.querySelectorAll('.demo-btn').forEach(b => b.onclick = () => {
     setState({ analyzing: false, analyzeError: '', analyzeResult: SAMPLES[Number(b.dataset.i)].data })
     paint()

@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0",
+  "id": "matter_e5f6g7h8",
+  "mode": "standard",
+  "mode_source": "auto",
+  "complexity_score": 0.5,
+  "detected_features": [
+    "has_deadline",
+    "has_multiple_steps",
+    "has_materials",
+    "has_attachments",
+    "has_location"
+  ],
+  "enabled_sections": [
+    "summary",
+    "schedule",
+    "content",
+    "steps",
+    "materials",
+    "source"
+  ],
+  "title": "奖学金报名材料提交",
+  "priority": "medium",
+  "status": "not_started",
+  "status_source": "auto",
+  "timezone": "Asia/Shanghai",
+  "created_at": "2026-10-16T10:00:00+08:00",
+  "updated_at": "2026-10-16T10:00:00+08:00",
+  "deadline": {
+    "scope": "overall",
+    "label": "截止时间",
+    "due_at": "2026-10-25T18:00:00+08:00",
+    "all_day": false,
+    "source_ref": {
+      "quote": "10月25日18:00前提交"
+    }
+  },
+  "reminders": [
+    {
+      "reminder_id": "rem_1",
+      "offset_minutes": 120,
+      "channels": ["app"],
+      "enabled": true
+    }
+  ],
+  "default_location": {
+    "type": "offline",
+    "name": "行政楼302",
+    "room": "302",
+    "source_ref": {
+      "quote": "交至行政楼302"
+    }
+  },
+  "key_points": ["需本人签字"],
+  "attachments": [
+    {
+      "attachment_id": "att_1",
+      "attachment_name": "报名表",
+      "attachment_type": "file",
+      "source_ref": {
+        "quote": "附件1"
+      }
+    }
+  ],
+  "materials": [
+    {
+      "material_id": "mat_1",
+      "material_name": "报名表",
+      "material_type": "required",
+      "status": "pending",
+      "template_attachment_id": "att_1",
+      "source_ref": {
+        "quote": "提交报名表（附件1）"
+      }
+    },
+    {
+      "material_id": "mat_2",
+      "material_name": "成绩单",
+      "material_type": "required",
+      "status": "pending",
+      "source_ref": {
+        "quote": "成绩单"
+      }
+    },
+    {
+      "material_id": "mat_3",
+      "material_name": "身份证复印件",
+      "material_type": "required",
+      "status": "pending",
+      "source_ref": {
+        "quote": "身份证复印件"
+      }
+    }
+  ],
+  "step_list": [
+    {
+      "step_id": "step_1",
+      "order": 1,
+      "title": "准备报名材料",
+      "status": "not_started",
+      "due_at": "2026-10-25T18:00:00+08:00",
+      "due_at_inherited_from": "overall",
+      "key_points": ["需本人签字"],
+      "materials": ["mat_1", "mat_2", "mat_3"],
+      "attachments": ["att_1"],
+      "source_ref": {
+        "quote": "提交报名表（附件1）、成绩单、身份证复印件"
+      }
+    },
+    {
+      "step_id": "step_2",
+      "order": 2,
+      "title": "交至行政楼302",
+      "status": "not_started",
+      "due_at": "2026-10-25T18:00:00+08:00",
+      "due_at_inherited_from": "overall",
+      "location": {
+        "type": "offline",
+        "name": "行政楼302",
+        "room": "302"
+      },
+      "source_ref": {
+        "quote": "交至行政楼302"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "quote": "奖学金报名：10月25日18:00前提交报名表（附件1）、成绩单、身份证复印件，交至行政楼302，需本人签字。",
+      "page": null
+    }
+  ]
+}

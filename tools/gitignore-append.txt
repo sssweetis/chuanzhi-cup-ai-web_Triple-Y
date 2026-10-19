@@ -1,0 +1,13 @@
+
+
+# ===== C 补充：本地密钥与前端构建产物 =====
+.env.local
+.env.*.local
+.ssh/
+node_modules/
+dist-ssr/
+.vite/
+coverage/
+
+# ===== 比赛官方原件（混有个人信息，不上传；要点见 docs/） =====
+时间，材料，评分，环境，要求.docx

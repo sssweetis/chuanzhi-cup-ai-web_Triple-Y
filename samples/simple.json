@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "id": "matter_a1b2c3d4",
+  "mode": "simple",
+  "mode_source": "auto",
+  "complexity_score": 0.2,
+  "detected_features": ["has_deadline"],
+  "enabled_sections": ["summary", "schedule", "source"],
+  "title": "提交奖学金报名表",
+  "priority": "medium",
+  "status": "not_started",
+  "status_source": "auto",
+  "timezone": "Asia/Shanghai",
+  "created_at": "2026-10-16T10:00:00+08:00",
+  "updated_at": "2026-10-16T10:00:00+08:00",
+  "deadline": {
+    "scope": "overall",
+    "label": "截止时间",
+    "due_at": "2026-10-25T18:00:00+08:00",
+    "all_day": false,
+    "source_ref": {
+      "quote": "请于10月25日18:00前提交奖学金报名表。"
+    }
+  },
+  "reminders": [
+    {
+      "reminder_id": "rem_1",
+      "offset_minutes": 120,
+      "channels": ["app"],
+      "enabled": true
+    }
+  ],
+  "sources": [
+    {
+      "quote": "请于10月25日18:00前提交奖学金报名表。",
+      "page": null
+    }
+  ]
+}

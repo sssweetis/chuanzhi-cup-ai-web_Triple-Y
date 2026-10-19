@@ -154,6 +154,18 @@ td.c-act{width:96px;text-align:right;}
 .demo-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
 .demo-label{font-size:12px;color:var(--muted);}
 .demo-btn{font-size:12px;}
+.buckets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+.bucket{border-radius:12px;padding:10px 12px;font-size:13px;}
+.bucket ul{margin:6px 0 0;padding-left:18px;}
+.bucket li{margin:3px 0;}
+.bucket-empty{color:var(--muted);font-size:12px;margin-top:4px;}
+.b-ok{background:#e9f7ee;}
+.b-ok .bucket-head{color:#2f8a4d;font-weight:700;}
+.b-bad{background:#fdecec;}
+.b-bad .bucket-head{color:#c0392b;font-weight:700;}
+.b-warn{background:#fff4d6;}
+.b-warn .bucket-head{color:#a8791c;font-weight:700;}
+@media (max-width:800px){.buckets{grid-template-columns:1fr;}}
 .mask{position:fixed;inset:0;background:rgba(20,25,23,.42);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
 .mask.show{display:flex;}
 .modal{background:#fff;border-radius:18px;width:420px;max-width:100%;padding:26px;}

@@ -1,23 +1,44 @@
-# 前端（B 负责）
+# 智办 · 前端（frontend/）
 
-后端接口已经就绪，前端页面放在这个目录。
+## 怎么跑
+```bash
+npm install
+npm run dev      # 开发，默认 http://localhost:5173
+npm run build    # 产出 dist/
+npm run preview  # 预览构建产物
+```
 
-## 接入三步
+## 接口对接（和 C 对齐）
+- 统一封装在 `src/api.js`：`analyzeNotification(text)` → `POST /api/analyze`
+- `POST /api/analyze` 请求体：`{ "text": "通知原文" }`（字段名统一为 `text`）
+- 返回：Matter 对象（含 `mode` / `enabled_sections` / `title` / `deadline` / `materials[]` / `step_list[]` 等，按 A 的 schema）
+- 后端地址在 `.env.development` 的 `VITE_API_BASE_URL`，联调时改
+- fetch 超时统一 60s（真实解析 10~30s，不能更短）
+- `POST /api/check` 入参：
+```json
+{
+  "notification_id": "通知id",
+  "profile": { "team_size": 3, "has_doc": true, "has_video": false, "has_teacher_confirm": null },
+  "checked_material_ids": ["m1", "m2"]
+}
+```
 
-1. 本目录建前端项目（React + Vite / Vue 3 + Vite 均可）
-2. 根目录 `.env.local` 写后端地址：
+## 渲染约定
+- 按返回的 `data.mode` 渲染：`simple` 不出 materials/steps（设计如此，不是缺字段）；`standard` 加材料/地点；`complex` 加流程步骤/预警
+- 解析中有骨架屏 loading，失败有错误文案 + 重试按钮
+- 用户中心弹窗懒加载（动态 import，首屏不加载）
 
-   ```env
-   VITE_API_BASE_URL=http://127.0.0.1:8000
-   ```
-
-3. 复制 `../backend/for-frontend/api.js` 到前端 `src/api/notice.js`，调用 `analyzeNotice(text)`
-
-## 接口速记
-
-- `POST /api/analyze`，请求 `{ "text": "通知原文" }`
-- 响应恒定 HTTP 200 + `{ success, data, error }`，判断 `success` 即可
-- `data.mode` = `simple` / `standard` / `complex`，按模式决定渲染「材料清单 / 步骤 / 风险预警」等区块
-- 跨域已放开，不用配代理
-
-详细字段结构见 [../docs/接口契约.md](../docs/接口契约.md)，后端启动与联调见 [../backend/README.md](../backend/README.md)。
+## 目录
+```
+src/
+  api.js            接口封装
+  state.js         极简全局状态
+  components/
+    ProfileCard.js  用户卡片
+    Calendar.js     月历
+    InputPanel.js   输入通知 + AI 解析
+    ModeCard.js     按 mode 渲染结果卡片
+    TaskList.js     任务清单 + 历史
+    CheckForm.js    10/18 用户情况填写
+    UserModal.js    个人中心（懒加载）
+```

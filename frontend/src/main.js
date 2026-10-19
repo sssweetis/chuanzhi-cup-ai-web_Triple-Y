@@ -11,7 +11,7 @@ function boot() {
   app.innerHTML = `
     <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
     <div class="app">
-      <div class="topbar"><h1>智办<span>·</span>通知转任务</h1><div class="slogan">粘贴一段通知，剩下的我帮你记着</div></div>
+      <div class="topbar"><h1>Triple Y<span>·</span>通知转任务</h1><div class="slogan">粘贴一段通知，剩下的我帮你记着</div></div>
       <div class="layout">
         <div class="left">
           <div id="profileMount"></div>

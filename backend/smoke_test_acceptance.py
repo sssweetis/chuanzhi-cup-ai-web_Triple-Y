@@ -111,7 +111,8 @@ def check_matter(data, expected_mode):
     for w in data.get("warning_list") or []:
         if not w.get("message"):
             issues.append("预警 %s 缺少 message（前端只能显示空卡片）" % w.get("warning_id"))
-        elif w.get("warning_type") not in ("time_conflict", "material_reuse", "deadline_risk", "missing_material"):
+        elif w.get("warning_type") not in ("time_conflict", "material_reuse", "deadline_risk",
+                                                       "missing_material", "missing_information"):
             warnings.append("预警类型不在枚举内：%r" % w.get("warning_type"))
 
     # 截止时间

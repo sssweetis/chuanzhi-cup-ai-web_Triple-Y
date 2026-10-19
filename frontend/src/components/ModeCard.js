@@ -1,9 +1,12 @@
-// 按后端返回的 Matter 对象 + enabled_sections 渲染（A 给的字段细则）
+// 按后端返回的 Matter 对象 + enabled_sections 渲染（A 的 5 条新规则）
+// 1. 只渲染 enabled_sections 里出现的区块；字段缺失直接跳过，绝不白屏
+// 2. 步骤按数组索引渲染，忽略 order 字段
+// 3. dependencies 数组画依赖连线
+// 4. template_attachment_id → attachments 里找 ID，显示"下载模板"
+// 5. source_ref.quote 做成悬浮提示
 const MODE_LABEL = { simple: '极简', standard: '标准', complex: '完整流程' }
-// 优先级配色：low 灰 / medium 蓝 / high 橙 / urgent 红
 const PRIORITY_CLS = { low: 'p-low', medium: 'p-mid', high: 'p-high', urgent: 'p-urgent' }
 const PRIORITY_LABEL = { low: '低', medium: '普通', high: '较急', urgent: '紧急' }
-// 材料状态
 const MAT_STATUS = { pending: '未准备', uploaded: '已上传', submitted: '已提交', approved: '已通过', rejected: '已驳回' }
 const MAT_STATUS_CLS = { pending: 'st-pending', uploaded: 'st-mid', submitted: 'st-mid', approved: 'st-ok', rejected: 'st-bad' }
 const STEP_STATUS = { not_started: '未开始', pending: '待处理', in_progress: '进行中', completed: '已完成', done: '已完成' }
@@ -14,7 +17,6 @@ function fmtTime(iso) {
   const p = n => String(n).padStart(2, '0')
   return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`
 }
-// 倒计时：due_at - 当前时间 → “还剩 9 天 3 小时”
 function countdown(iso) {
   if (!iso) return ''
   const diff = new Date(iso) - new Date()
@@ -30,12 +32,21 @@ function targetName(t) {
   if (!t) return ''
   return typeof t === 'string' ? t : (t.name || '')
 }
+// 规则 5：source_ref.quote → 悬浮提示
+function tip(quote) {
+  if (!quote) return ''
+  return `<span class="src-tip" title="原文：${quote.replace(/"/g, '&quot;')}">出处</span>`
+}
 
 export function renderMatter(m) {
   if (!m) return ''
+  try { return _render(m) } catch { return '<div class="ph">解析结果格式异常</div>' }
+}
+
+function _render(m) {
   let html = ''
 
-  // ===== summary：标题区 =====
+  // summary
   if (hasSection(m, 'summary')) {
     html += `<div class="mc-head">`
     html += `<span class="mode-chip">${MODE_LABEL[m.mode] || m.mode}</span>`
@@ -50,7 +61,7 @@ export function renderMatter(m) {
     html += `</div>`
   }
 
-  // ===== schedule：倒计时卡片 =====
+  // schedule
   if (hasSection(m, 'schedule') && m.deadline) {
     const due = m.deadline.due_at
     html += `<div class="ddl-card">
@@ -61,28 +72,26 @@ export function renderMatter(m) {
     </div>`
     if (Array.isArray(m.reminders) && m.reminders.length) {
       const r = m.reminders[0]
-      const ch = (r.channels || []).join(' / ')
-      html += `<div class="mc-row">提醒：提前 ${Math.round(r.offset_minutes / 60)} 小时（${ch}）</div>`
+      html += `<div class="mc-row">提醒：提前 ${Math.round(r.offset_minutes / 60)} 小时（${(r.channels || []).join(' / ')}）</div>`
     }
     if (m.default_location) html += `<div class="mc-row">地点：${m.default_location.name || ''}</div>`
   }
 
-  // ===== content：要点 + 附件 =====
+  // content
   if (hasSection(m, 'content')) {
     if (Array.isArray(m.key_points) && m.key_points.length) {
       html += `<div class="mc-sub">注意事项</div><ul class="mc-list">${m.key_points.map(k => `<li>${k}</li>`).join('')}</ul>`
     }
     if (Array.isArray(m.attachments) && m.attachments.length) {
-      html += `<div class="mc-sub">附件</div><div class="att-row">${m.attachments.map(a => {
-        const url = a.attachment_url
-        return url
-          ? `<a class="btn btn-ghost btn-sm" href="${url}" target="_blank" rel="noopener">⬇ ${a.attachment_name}</a>`
+      html += `<div class="mc-sub">附件</div><div class="att-row">${m.attachments.map(a =>
+        a.attachment_url
+          ? `<a class="btn btn-ghost btn-sm" href="${a.attachment_url}" target="_blank" rel="noopener">⬇ ${a.attachment_name}</a>`
           : `<span class="btn btn-ghost btn-sm" style="opacity:.6">📎 ${a.attachment_name}</span>`
-      }).join('')}</div>`
+      ).join('')}</div>`
     }
   }
 
-  // ===== steps：流程步骤 =====
+  // steps：规则 2，按数组索引渲染
   if (hasSection(m, 'steps') && Array.isArray(m.step_list) && m.step_list.length) {
     const matMap = {}
     ;(m.materials || []).forEach(x => { matMap[x.material_id] = x.material_name })
@@ -92,19 +101,21 @@ export function renderMatter(m) {
       if (!dueAt && s.due_at_inherited_from === 'overall' && m.deadline) dueAt = m.deadline.due_at
       const mats = Array.isArray(s.materials) && s.materials.length
         ? `<div class="mc-row">材料：${s.materials.map(id => matMap[id] || id).join('、')}</div>` : ''
+      // 规则 3：dependencies 连线
       const dep = Array.isArray(s.dependencies) && s.dependencies.length
-        ? `<div class="dep">需先完成：${s.dependencies.map(d => {
+        ? `<div class="dep-chain">← 需先完成：${s.dependencies.map(d => {
             const dstep = m.step_list.find(x => x.step_id === d.step_id)
             return dstep ? dstep.title : d.step_id
           }).join('、')}</div>` : ''
       const owner = s.owner ? `<div class="mc-row">负责人：${s.owner.name}</div>` : ''
-      const review = s.review && s.review.required ? `<div class="dep">需审核：${s.review.reviewer ? s.review.reviewer.name : ''}</div>` : ''
+      const review = s.review && s.review.required ? `<div class="dep-chain">需审核：${s.review.reviewer ? s.review.reviewer.name : ''}</div>` : ''
       const subs = Array.isArray(s.sub_step_list) && s.sub_step_list.length
-        ? `<ul class="substeps">${s.sub_step_list.map(sub => `<li>${sub.title} <span class="st-badge st-pending">${STEP_STATUS[sub.status] || sub.status || ''}</span></li>`).join('')}</ul>` : ''
+        ? `<ul class="substeps">${s.sub_step_list.map(sub => `<li>↳ ${sub.title} <span class="st-badge st-pending">${STEP_STATUS[sub.status] || sub.status || ''}</span></li>`).join('')}</ul>` : ''
       const done = s.status === 'completed' || s.status === 'done'
       html += `<li>
         <span class="step-dot">${i + 1}</span>
         <span class="step-title">${s.title}</span>
+        ${tip(s.source_ref && s.source_ref.quote)}
         <span class="st-badge ${done ? 'st-ok' : 'st-pending'}">${STEP_STATUS[s.status] || s.status || ''}</span>
         ${dueAt ? `<span class="step-due">${fmtTime(dueAt)}</span>` : ''}
         ${owner}${review}${mats}${dep}${subs}
@@ -113,7 +124,7 @@ export function renderMatter(m) {
     html += `</ol>`
   }
 
-  // ===== materials：材料清单 =====
+  // materials：规则 4，template_attachment_id 找附件
   if (hasSection(m, 'materials') && Array.isArray(m.materials) && m.materials.length) {
     const attMap = {}
     ;(m.attachments || []).forEach(a => { attMap[a.attachment_id] = a })
@@ -126,13 +137,13 @@ export function renderMatter(m) {
       html += `<li><label class="chk"><input type="checkbox" data-mat="${mat.material_id}">
         <b>${mat.material_name}</b> ${typeTag}
         <span class="st-badge ${MAT_STATUS_CLS[mat.status] || 'st-pending'}">${MAT_STATUS[mat.status] || mat.status || ''}</span>
-        ${tpl}
+        ${tpl} ${tip(mat.source_ref && mat.source_ref.quote)}
       </label></li>`
     })
     html += `</ul>`
   }
 
-  // ===== warnings：分级预警 =====
+  // warnings
   if (hasSection(m, 'warnings') && Array.isArray(m.warning_list) && m.warning_list.length) {
     html += m.warning_list.map(w => `<div class="warn warn-${w.severity || 'medium'}">
       <div>${w.message}</div>
@@ -140,7 +151,7 @@ export function renderMatter(m) {
     </div>`).join('')
   }
 
-  // ===== governance：协作 =====
+  // governance
   if (hasSection(m, 'governance')) {
     const people = []
     if (m.owner) people.push('负责人：' + (m.owner.name || ''))
@@ -148,7 +159,7 @@ export function renderMatter(m) {
     if (people.length) html += `<div class="mc-sub">协作</div>${people.map(p => `<div class="mc-row">${p}</div>`).join('')}`
   }
 
-  // ===== source：原文出处 =====
+  // source
   if (hasSection(m, 'source') && Array.isArray(m.sources) && m.sources.length) {
     html += `<details class="src-detail"><summary>原文出处（${m.sources.length}）</summary>`
     html += m.sources.map(s => `<div class="src-quote">${s.page != null ? `<span class="page-tag">第 ${s.page} 页</span>` : ''}“${s.quote}”</div>`).join('')

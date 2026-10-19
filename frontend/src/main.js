@@ -26,8 +26,8 @@ function boot() {
     </div>`
   renderAll()
   state.onUpdate = renderAll
-  // 倒计时剩余时间每 60 秒自动刷新一次
-  setInterval(renderAll, 60000)
+  // 倒计时只刷新任务列表，避免重渲染输入框/表单导致正在填的内容被重置
+  setInterval(() => renderTaskList(document.getElementById('listMount')), 60000)
 }
 
 function renderAll() {

@@ -65,7 +65,9 @@ export function renderCheckForm(mount) {
     const box = mount.querySelector('#checkResult')
     box.textContent = '核对中…'
     try {
-      const res = await checkProfile({ matter: state.analyzeResult || null, profile, checked_material_ids: checked })
+      const body = { profile, checked_material_ids: checked }
+      if (state.analyzeResult) body.matter = state.analyzeResult
+      const res = await checkProfile(body)
       // C 返回 checked / missing_required / missing_optional / need_confirm / profile_issues / summary
       const buckets = {
         ready: res.checked || [],

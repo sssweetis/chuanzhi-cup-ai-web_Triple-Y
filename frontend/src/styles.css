@@ -76,6 +76,8 @@ table.cal td .dot.hot{background:var(--danger);}
 .step-title{font-weight:600;}
 .step-due{font-size:12px;color:var(--muted);margin-left:8px;}
 .dep{font-size:12px;color:var(--accent);margin-top:3px;}
+.dep-chain{font-size:12px;color:var(--primary);background:#f3f1ff;border-radius:6px;padding:2px 8px;margin-top:3px;display:inline-block;}
+.src-tip{display:inline-block;font-size:11px;color:var(--primary);background:#eef0ff;border-radius:4px;padding:0 6px;cursor:help;margin-left:4px;}
 .substeps{padding-left:18px;font-size:12.5px;color:var(--muted);margin-top:3px;}
 .mat-src{font-size:11.5px;color:var(--muted);}
 .src-quote{font-size:12.5px;color:var(--muted);border-left:3px solid var(--line);padding-left:8px;margin:4px 0;}

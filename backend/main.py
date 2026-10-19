@@ -157,6 +157,10 @@ def _mock_matter(notification_text: str) -> Optional[dict]:
         data["updated_at"] = now
         data["mode"] = mode
         data["mode_source"] = "mock"
+        # 兜底数据也要能"对上原文"：把用户输入当作出处，
+        # 这样缺项核对里的关键词判断（视频/说明文档/签字…）仍然生效
+        if text.strip():
+            data["sources"] = [{"quote": text.strip()[:800]}]
         return data
     return None
 

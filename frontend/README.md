@@ -9,7 +9,9 @@ npm run preview  # 预览构建产物
 ```
 
 ## 接口对接（和 C 对齐）
-- 统一封装在 `src/api.js`：`analyzeNotification(text)` → `POST /api/analyze`，`checkProfile(payload)` → `POST /api/check`
+- 统一封装在 `src/api.js`：`analyzeNotification(text)` → `POST /api/analyze`
+- `POST /api/analyze` 请求体：`{ "text": "通知原文" }`（字段名统一为 `text`）
+- 返回：Matter 对象（含 `mode` / `enabled_sections` / `title` / `deadline` / `materials[]` / `step_list[]` 等，按 A 的 schema）
 - 后端地址在 `.env.development` 的 `VITE_API_BASE_URL`，联调时改
 - fetch 超时统一 60s（真实解析 10~30s，不能更短）
 - `POST /api/check` 入参：

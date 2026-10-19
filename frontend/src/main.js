@@ -26,6 +26,8 @@ function boot() {
     </div>`
   renderAll()
   state.onUpdate = renderAll
+  // 倒计时剩余时间每 60 秒自动刷新一次
+  setInterval(renderAll, 60000)
 }
 
 function renderAll() {

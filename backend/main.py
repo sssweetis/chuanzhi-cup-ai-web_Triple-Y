@@ -20,8 +20,12 @@ C 的后端入口（FastAPI）—— 通知抽取服务
       前端 B 只需判断 body.success，不用再处理 422 的 detail 结构。
 """
 
+import json
 import logging
 import os
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -37,13 +41,15 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from notification_extractor import LLM_ENABLE_MOCK  # noqa: E402
 from service import analyze_notification  # noqa: E402
 from requirement_checker import check_requirements  # noqa: E402
 
 logger = logging.getLogger("main")
 
 # ==================== 配置 ====================
+
+# 无 Key 时是否返回示例 Matter（A 的抽取模块本身已不带 mock，这里由入口层兜底）
+LLM_ENABLE_MOCK = (os.getenv("LLM_ENABLE_MOCK") or "0").strip() == "1"
 
 DEFAULT_MAX_TEXT_LENGTH = 3000
 
@@ -115,6 +121,58 @@ def _fail(error: str) -> dict:
     return {"success": False, "data": None, "error": error}
 
 
+# ==================== 无 Key 时的演示兜底 ====================
+
+_MOCK_HINTS = {
+    "complex": ("流程", "审核", "依赖", "子步骤", "缴费", "准考证", "答辩", "负责人", "学院"),
+    "standard": ("材料", "附件", "成绩单", "复印件", "地点", "盖章", "签字", "行政楼", "办公室"),
+}
+
+
+def _mock_matter(notification_text: str) -> Optional[dict]:
+    """从仓库自带的 samples/ 里挑一份示例 Matter（内容虚构、结构真实）。
+
+    A 的新版抽取模块无 Key 时会直接报错；为了让前端在没有 Key 时也能联调，
+    这里用 samples/simple|standard|complex.json 作为兜底。
+    """
+    text = notification_text or ""
+    mode = "simple"
+    for name in ("complex", "standard"):
+        if any(k in text for k in _MOCK_HINTS[name]):
+            mode = name
+            break
+
+    parent = Path(__file__).resolve().parent
+    for path in (parent.parent / "samples" / (mode + ".json"), parent / "samples" / (mode + ".json")):
+        if not path.exists():
+            continue
+        try:
+            with path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        now = datetime.now(timezone(timedelta(hours=8))).isoformat()
+        data["id"] = "matter_mock_" + uuid.uuid4().hex[:8]
+        data["created_at"] = now
+        data["updated_at"] = now
+        data["mode"] = mode
+        data["mode_source"] = "mock"
+        return data
+    return None
+
+
+def _analyze_with_fallback(text: str) -> dict:
+    """先走 A 的真实抽取；无 Key 且 LLM_ENABLE_MOCK=1 时退回示例 Matter。"""
+    result = analyze_notification(text)
+    if (not result.get("success") and LLM_ENABLE_MOCK
+            and "LLM_API_KEY" in str(result.get("error") or "")):
+        mock = _mock_matter(text)
+        if mock:
+            logger.warning("未配置 LLM_API_KEY，返回示例 Matter 兜底（仅供前端联调）")
+            return {"success": True, "data": mock, "error": None}
+    return result
+
+
 # ==================== 接口 ====================
 
 @app.get("/")
@@ -150,7 +208,7 @@ def analyze(req: AnalyzeRequest):
         return _fail(f"通知过长，当前{len(text)}字符，上限{MAX_TEXT_LENGTH}")
 
     # 3) 交给 A 的抽取服务（不改动其内部逻辑）
-    return analyze_notification(text)
+    return _analyze_with_fallback(text)
 
 
 # ==================== 10/18：用户情况核对（缺项核对）====================
@@ -186,7 +244,7 @@ def check(req: CheckRequest):
             return _fail("请提供通知原文（text）或已解析结果（matter）")
         if 0 < MAX_TEXT_LENGTH < len(notice_text):
             return _fail(f"通知过长，当前{len(notice_text)}字符，上限{MAX_TEXT_LENGTH}")
-        result = analyze_notification(notice_text)
+        result = _analyze_with_fallback(notice_text)
         if not result.get("success"):
             return result
         matter = result.get("data")

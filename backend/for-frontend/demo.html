@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>通知抽取 · 联调演示（C）</title>
+<style>
+  :root { --line:#e5e7eb; --ink:#111827; --muted:#6b7280; --brand:#2563eb; --ok:#059669; --warn:#d97706; --bad:#dc2626; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; color:var(--ink); background:#f8fafc; }
+  header { padding:18px 22px; background:#fff; border-bottom:1px solid var(--line); }
+  header h1 { margin:0 0 6px; font-size:18px; }
+  header p { margin:0; color:var(--muted); }
+  header input { width:240px; padding:4px 8px; border:1px solid var(--line); border-radius:6px; }
+  main { max-width:1000px; margin:18px auto 60px; padding:0 16px; display:grid; gap:16px; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; }
+  h2 { margin:0 0 10px; font-size:15px; }
+  h3 { margin:14px 0 6px; font-size:14px; }
+  textarea { width:100%; min-height:150px; padding:10px; border:1px solid var(--line); border-radius:8px; font:inherit; resize:vertical; }
+  .row { display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  button { padding:7px 14px; border:1px solid var(--brand); background:var(--brand); color:#fff; border-radius:8px; cursor:pointer; font:inherit; }
+  button:disabled { opacity:.55; cursor:not-allowed; }
+  button.ghost { background:#fff; color:var(--brand); }
+  .badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; color:#fff; background:var(--muted); vertical-align:middle; }
+  .badge.simple { background:#0891b2; } .badge.standard { background:#7c3aed; } .badge.complex { background:#b91c1c; }
+  ul, ol { margin:6px 0; padding-left:22px; }
+  li { margin:2px 0; }
+  .muted { color:var(--muted); }
+  .err { color:var(--bad); }
+  .ok { color:var(--ok); }
+  .warn { color:var(--warn); }
+  .tag { font-size:12px; padding:0 6px; border-radius:4px; background:#f1f5f9; color:var(--muted); margin-left:6px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-top:10px; background:#fbfdff; }
+  .missing li { color:var(--bad); }
+  .issue li { color:var(--warn); }
+  code { background:#f1f5f9; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>通知抽取 · 联调演示（C 的后端联调用）</h1>
+  <p>后端地址：<input id="apiBase" value="http://127.0.0.1:8000"> <button id="btnHealth" class="ghost">检查服务</button> <span id="health" class="muted">未检查</span></p>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>1. 粘贴通知原文</h2>
+    <textarea id="text" placeholder="把一段校园通知原文粘贴到这里，然后点「分析」"></textarea>
+    <div class="row">
+      <span id="counter" class="muted">0 字</span>
+      <button id="btnAnalyze">分析</button>
+      <button id="btnClear" class="ghost">清空（含本地保存）</button>
+      <span id="msg" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="resultPanel" hidden>
+    <h2>2. 解析结果 <span id="mode" class="badge"></span> <span id="cost" class="muted"></span></h2>
+    <h3 id="title"></h3>
+    <p id="deadline" class="muted"></p>
+
+    <h3>材料清单 <span class="tag">勾选你已准备好的</span></h3>
+    <ul id="materials"></ul>
+
+    <h3>办理步骤</h3>
+    <ol id="steps"></ol>
+
+    <h3>风险预警</h3>
+    <ul id="warnings"></ul>
+
+    <div class="row">
+      <label><input type="checkbox" id="hasVideo"> 我还没有准备视频材料</label>
+      <button id="btnCheck">核对缺项</button>
+      <span class="muted">（勾选材料 / 自述情况后点这里）</span>
+    </div>
+    <div id="checkResult"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = { text: "notice.text", matter: "notice.matter", checked: "notice.checked", profile: "notice.profile" };
+  var matter = null;
+  var lastCost = 0;
+
+  function $(id) { return document.getElementById(id); }
+
+  function apiBase() {
+    return ($("apiBase").value || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  }
+
+  function esc(s) {
+    var t = String(s == null ? "" : s);
+    var map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    var out = "";
+    for (var i = 0; i < t.length; i++) {
+      var ch = t.charAt(i);
+      out += map[ch] || ch;
+    }
+    return out;
+  }
+
+  function setMsg(text, cls) {
+    var el = $("msg");
+    el.textContent = text || "";
+    el.className = cls || "muted";
+  }
+
+  function request(path, body, timeoutMs) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs || 90000);
+    var opt = body === undefined
+      ? { signal: ctrl.signal }
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal };
+    return fetch(apiBase() + path, opt).then(function (r) {
+      return r.json();
+    }).finally(function () { clearTimeout(timer); });
+  }
+
+  // ---------- 本地保存 / 恢复（10/19：刷新不丢） ----------
+  function persist() {
+    try {
+      localStorage.setItem(KEY.text, $("text").value);
+      localStorage.setItem(KEY.matter, matter ? JSON.stringify(matter) : "");
+      localStorage.setItem(KEY.checked, JSON.stringify(checkedIds()));
+      localStorage.setItem(KEY.profile, JSON.stringify({ has_video: $("hasVideo").checked }));
+    } catch (e) { /* localStorage 不可用时静默 */ }
+  }
+
+  function restore() {
+    try {
+      var t = localStorage.getItem(KEY.text);
+      if (t) { $("text").value = t; updateCounter(); }
+      var m = localStorage.getItem(KEY.matter);
+      if (m) { matter = JSON.parse(m); renderMatter(matter, 0); }
+      var c = localStorage.getItem(KEY.checked);
+      if (c) { JSON.parse(c).forEach(function (id) { var box = document.querySelector('[data-mat="' + id + '"]'); if (box) { box.checked = true; } }); }
+      var p = localStorage.getItem(KEY.profile);
+      if (p && JSON.parse(p).has_video) { $("hasVideo").checked = true; }
+    } catch (e) { /* 忽略损坏的本地数据 */ }
+  }
+
+  function checkedIds() {
+    return Array.prototype.slice.call(document.querySelectorAll("[data-mat]"))
+      .filter(function (x) { return x.checked; })
+      .map(function (x) { return x.getAttribute("data-mat"); });
+  }
+
+  // ---------- 渲染 ----------
+  function renderMatter(data, cost) {
+    matter = data;
+    $("resultPanel").hidden = false;
+    var mode = data.mode || "?";
+    $("mode").textContent = mode;
+    $("mode").className = "badge " + mode;
+    $("cost").textContent = cost ? ("耗时 " + cost + " ms") : "";
+    $("title").textContent = data.title || "（无标题）";
+
+    var dl = data.deadline || {};
+    $("deadline").textContent = dl.due_at
+      ? ("截止时间：" + dl.due_at.replace("T", " ").slice(0, 16) + (dl.label ? "（" + dl.label + "）" : ""))
+      : "截止时间：原文未识别到";
+
+    var mats = data.materials || [];
+    $("materials").innerHTML = mats.length
+      ? mats.map(function (m) {
+          var type = m.material_type === "required" ? "必交" : (m.material_type === "optional" ? "选填" : "未明确");
+          return '<li><label><input type="checkbox" data-mat="' + esc(m.material_id) + '"> ' +
+            esc(m.material_name || "未命名材料") + ' <span class="tag">' + type + '</span></label></li>';
+        }).join("")
+      : '<li class="muted">该通知没有要求提交材料（simple 模式本来就没有这一步）</li>';
+
+    var steps = (data.step_list || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    $("steps").innerHTML = steps.length
+      ? steps.map(function (s, i) {
+          var mm = (s.materials || []).join("、");
+          return "<li><b>" + esc(s.title || "未命名步骤") + "</b>" +
+            (s.desc ? '<div class="muted">' + esc(s.desc) + "</div>" : "") +
+            (mm ? '<div class="muted">材料：' + esc(mm) + "</div>" : "") + "</li>";
+        }).join("")
+      : '<li class="muted">该通知没有拆出步骤</li>';
+
+    var warns = data.warning_list || [];
+    $("warnings").innerHTML = warns.length
+      ? warns.map(function (w) {
+          return "<li><b>" + esc(w.severity || "") + "</b> " + esc(w.message || w.warning_type || "预警") + "</li>";
+        }).join("")
+      : '<li class="muted">无</li>';
+
+    $("checkResult").innerHTML = "";
+  }
+
+  function renderCheck(d) {
+    var miss = d.missing_required || [];
+    var confirm = d.need_confirm || [];
+    var issues = d.profile_issues || [];
+    var html = '<div class="card"><b>' + esc(d.summary || "") + "</b>";
+    if (miss.length) {
+      html += '<div class="missing"><b>还缺的必交材料</b><ul>' + miss.map(function (m) {
+        return "<li>" + esc(m.material_name) + "</li>";
+      }).join("") + "</ul></div>";
+    }
+    if (issues.length) {
+      html += '<div class="issue"><b>和你说的不符</b><ul>' + issues.map(function (i) {
+        return "<li>" + esc(i.message || i.label) + "</li>";
+      }).join("") + "</ul></div>";
+    }
+    if (confirm.length) {
+      html += '<div class="issue"><b>需要确认</b><ul>' + confirm.map(function (c) {
+        return "<li>" + esc(c.item) + "：" + esc(c.reason) + "</li>";
+      }).join("") + "</ul></div>";
+    }
+    html += '<div class="muted">完成度：' + Math.round((d.ready_ratio || 0) * 100) + "%" +
+      (d.ready ? "（必交已齐全）" : "") + "</div></div>";
+    $("checkResult").innerHTML = html;
+  }
+
+  // ---------- 事件 ----------
+  function updateCounter() {
+    $("counter").textContent = $("text").value.length + " 字";
+  }
+
+  $("text").addEventListener("input", function () { updateCounter(); persist(); });
+  $("apiBase").addEventListener("change", persist);
+  $("hasVideo").addEventListener("change", persist);
+
+  $("btnHealth").addEventListener("click", function () {
+    $("health").textContent = "检查中…";
+    $("health").className = "muted";
+    request("/health", undefined, 10000).then(function (h) {
+      $("health").textContent = "status=" + h.status + " / mode=" + h.mode;
+      $("health").className = h.status === "ok" ? "ok" : "err";
+    }).catch(function (e) {
+      $("health").textContent = "连不上（" + e + "）";
+      $("health").className = "err";
+    });
+  });
+
+  $("btnAnalyze").addEventListener("click", function () {
+    var text = $("text").value;
+    if (!text.trim()) { setMsg("请先粘贴通知原文", "err"); return; }
+    var btn = $("btnAnalyze");
+    btn.disabled = true;
+    setMsg("分析中…… 真实模式可能要 10~30 秒", "warn");
+    var t0 = Date.now();
+    request("/api/analyze", { text: text }, 120000).then(function (r) {
+      if (!r.success) { setMsg("分析失败：" + (r.error || "未知错误"), "err"); return; }
+      lastCost = Date.now() - t0;
+      renderMatter(r.data, lastCost);
+      setMsg("分析完成 ✅", "ok");
+      persist();
+    }).catch(function (e) {
+      setMsg(e && e.name === "AbortError" ? "分析超时（>120s）" : ("请求失败：" + e), "err");
+    }).finally(function () { btn.disabled = false; });
+  });
+
+  $("btnCheck").addEventListener("click", function () {
+    if (!matter) { setMsg("请先分析一次", "err"); return; }
+    var btn = $("btnCheck");
+    btn.disabled = true;
+    setMsg("核对中…", "muted");
+    var payload = {
+      matter: matter,
+      checked_material_ids: checkedIds(),
+      profile: { has_video: $("hasVideo").checked }
+    };
+    request("/api/check", payload, 30000).then(function (r) {
+      if (!r.success) { setMsg("核对失败：" + (r.error || "未知错误"), "err"); return; }
+      renderCheck(r.data);
+      setMsg("核对完成 ✅", "ok");
+      persist();
+    }).catch(function (e) {
+      setMsg("核对请求失败：" + e, "err");
+    }).finally(function () { btn.disabled = false; });
+  });
+
+  $("btnClear").addEventListener("click", function () {
+    $("text").value = "";
+    matter = null;
+    $("resultPanel").hidden = true;
+    $("checkResult").innerHTML = "";
+    $("hasVideo").checked = false;
+    updateCounter();
+    try { Object.keys(KEY).forEach(function (k) { localStorage.removeItem(KEY[k]); }); } catch (e) {}
+    setMsg("已清空", "muted");
+  });
+
+  restore();
+  updateCounter();
+})();
+</script>
+</body>
+</html>

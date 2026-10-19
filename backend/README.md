@@ -15,6 +15,7 @@ backend/
 ├── check_env.py              # C：服务端环境自检（Python/依赖/.env/模式/端口/链路）
 ├── test_llm.py               # C：大模型密钥连通性验证（真实调用 / --mock 离线）
 ├── smoke_test.py             # C：接口自测 10 项（只看标准库）
+├── smoke_test_acceptance.py  # C：10/20 端到端验收（三套通知 + 缺项核对，出验收表）
 ├── smoke_test_check.py       # C：/api/check 用户情况核对自测（10 项）
 ├── requirement_checker.py   # C：缺项核对规则（10/18 里程碑，纯确定性逻辑）
 ├── check_sync.py            # C：核对 backend/ 与 src/ 的抽取模块是否同步
@@ -350,3 +351,10 @@ python smoke_test_check.py http://127.0.0.1:8123
 > 说明：`profile` 的判定规则表是 C 侧的兜底实现（`requirement_checker.DEFAULT_PROFILE_CHECKS`）。
 > A 定稿核对规则后，替换规则表或由前端传 `profile_checks` 即可，不需要改接口结构。
 
+## 13.（10/19–10/20）联调演示页与端到端验收
+
+- **演示页**：`backend/for-frontend/demo.html` —— 单文件、无需构建。启动后端后用浏览器打开：
+  粘贴通知 → 分析 → 展示结果 → 勾选材料/自述 → 缺项核对 → 刷新不丢（localStorage）。
+- **验收脚本**：`python smoke_test_acceptance.py` —— 用三套通知跑通「分析 → 缺项核对」，
+  输出期望/实际 mode 对照表，并校验：simple 禁字段、materials/step_list 存在性、
+  `material_type` 合法性、**步骤 order 是否重复**、预警是否有 message。

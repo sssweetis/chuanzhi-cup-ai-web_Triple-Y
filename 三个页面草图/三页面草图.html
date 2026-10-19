@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>竞赛网页 · 三个页面草图（10/14）</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='14' rx='2' fill='none' stroke='%232b2d33' stroke-width='2'/%3E%3Cpath d='M7 9h10M7 13h6' stroke='%23c84b3a' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --board:#e9e9e3;
+    --frame:#ffffff;
+    --ink:#23252b;
+    --muted:#6f7178;
+    --line:#cfcfc8;
+    --block:#e4e4dd;
+    --block-line:#a9a9a2;
+    --dark:#2b2d33;
+    --accent:#c04836;
+    --green:#3f7d4e;
+    --amber:#a8791c;
+    --red:#b8402f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--board);
+    color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",system-ui,sans-serif;
+    font-size:15px;line-height:1.6;
+    padding:32px 20px 60px;
+  }
+  .board{max-width:1380px;margin:0 auto;}
+
+  /* ===== 板头 ===== */
+  .board-head{margin-bottom:22px;}
+  .board-head h1{font-size:24px;letter-spacing:.5px;}
+  .board-head .meta{color:var(--muted);font-size:13px;margin-top:6px;}
+  .flow{
+    margin-top:16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    border:1.5px dashed var(--block-line);background:#f4f4ef;
+    padding:12px 16px;border-radius:10px;font-size:14px;
+  }
+  .flow .step{padding:4px 10px;background:#fff;border:1px solid var(--line);border-radius:6px;}
+  .flow .arrow{color:var(--muted);}
+  .flow .note-mini{color:var(--muted);font-size:12.5px;margin-left:auto;}
+
+  /* ===== 三帧网格 ===== */
+  .grid{
+    display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;
+  }
+  @media (min-width:1100px){
+    .grid{grid-template-columns:repeat(3,1fr);align-items:start;}
+  }
+
+  /* ===== 浏览器框 ===== */
+  .frame{
+    background:var(--frame);border:1.5px solid #b9b9b2;border-radius:12px;
+    overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.06);
+  }
+  .chrome{
+    display:flex;align-items:center;gap:6px;background:#efefe9;
+    padding:8px 12px;border-bottom:1px solid var(--line);
+  }
+  .chrome .dot{width:10px;height:10px;border-radius:50%;background:#c6c6bf;}
+  .chrome .url{
+    flex:1;margin-left:8px;background:#fff;border:1px solid var(--line);
+    border-radius:6px;font-size:11.5px;color:var(--muted);padding:3px 10px;
+  }
+  .frame-tag{
+    background:var(--dark);color:#fff;font-size:12px;
+    padding:3px 10px;border-radius:6px;white-space:nowrap;
+  }
+  .body{padding:18px 18px 22px;}
+
+  /* 步骤条 */
+  .stepper{display:flex;gap:6px;font-size:12.5px;margin-bottom:18px;}
+  .stepper span{color:var(--muted);padding:3px 8px;border-radius:6px;background:#f0f0ec;}
+  .stepper span.on{background:var(--dark);color:#fff;}
+
+  /* 线框元素 */
+  .ph{border:1.5px dashed var(--block-line);background:#f6f6f1;border-radius:8px;color:var(--muted);}
+  .box{background:var(--block);border-radius:8px;}
+  .btn{
+    display:inline-block;border:none;border-radius:8px;cursor:pointer;
+    font-size:14px;padding:10px 18px;font-family:inherit;
+  }
+  .btn-dark{background:var(--dark);color:#fff;}
+  .btn-ghost{background:#fff;border:1.5px solid var(--line);color:var(--ink);}
+  .btn:active{transform:translateY(1px);}
+  .note{
+    display:inline-block;font-size:12px;color:var(--accent);
+    background:#fbe9e5;border:1px solid #ecc7bf;border-radius:5px;
+    padding:1px 7px;margin-top:6px;
+  }
+  .title-line{font-size:16px;font-weight:700;margin-bottom:12px;}
+  .sub{font-size:12.5px;color:var(--muted);margin-bottom:10px;}
+
+  /* 页1 */
+  .drop{height:170px;display:flex;align-items:center;justify-content:center;text-align:center;padding:14px;}
+  .row{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap;}
+  .result-zone{height:120px;margin-top:16px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;font-size:13px;}
+
+  /* 页2 要求行 */
+  .req{
+    border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:10px;
+  }
+  .req .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .chip{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--muted);}
+  .chip.material{color:var(--ink);}
+  .chip.time{color:var(--accent);border-color:#ecc7bf;background:#fbe9e5;}
+  .src{font-size:11px;color:#9a9a92;margin-left:auto;}
+  .req .text{font-size:14px;margin:7px 0 9px;}
+  .seg{display:flex;gap:6px;}
+  .seg button{
+    font-size:12.5px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit;
+    background:#fff;border:1.5px solid var(--line);color:var(--muted);
+  }
+  .seg button.sel-yes{background:var(--green);border-color:var(--green);color:#fff;}
+  .seg button.sel-no{background:var(--red);border-color:var(--red);color:#fff;}
+  .seg button.sel-mid{background:var(--amber);border-color:var(--amber);color:#fff;}
+  .num-input{
+    width:52px;border:1.5px solid var(--line);border-radius:6px;padding:4px 6px;
+    font-family:inherit;font-size:14px;text-align:center;
+  }
+
+  /* 页3 三类分组 */
+  .ddl-strip{
+    background:#2b2d33;color:#fff;border-radius:10px;padding:10px 14px;
+    font-size:14px;margin-bottom:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;
+  }
+  .grp{border-radius:10px;padding:11px 12px;margin-bottom:10px;border:1.5px solid var(--line);}
+  .grp h4{font-size:13.5px;margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+  .grp h4::before{content:"";width:9px;height:9px;border-radius:2px;background:currentColor;}
+  .grp.ready{border-color:#9dc0a6;background:#f2f7f2;}
+  .grp.ready h4{color:var(--green);}
+  .grp.miss{border:2px solid var(--red);background:#fdf1ef;}
+  .grp.miss h4{color:var(--red);}
+  .grp.maybe{border-color:#d9bd7a;background:#fbf6e9;}
+  .grp.maybe h4{color:var(--amber);}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:4px 0;cursor:pointer;}
+  .chk input{width:17px;height:17px;accent-color:var(--dark);}
+
+  /* toast */
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+    background:var(--dark);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:10px;
+    opacity:0;transition:.25s;pointer-events:none;z-index:99;
+  }
+  #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+
+  .board-foot{
+    margin-top:26px;border:1.5px dashed var(--block-line);border-radius:10px;
+    padding:14px 18px;font-size:13.5px;color:#4c4e55;background:#f4f4ef;
+  }
+  .board-foot b{color:var(--ink);}
+  .board-foot ol{margin:8px 0 0 20px;}
+  .board-foot li{margin:3px 0;}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- 板头 -->
+  <div class="board-head">
+    <h1>竞赛网页 · 三个页面草图</h1>
+    <div class="meta">10/14 · B（前端）的当天交付物 ｜ 第一阶段 10/14–10/20：先让文字通知跑通，不追求漂亮</div>
+    <div class="flow">
+      <span class="step">① 用户粘贴通知</span><span class="arrow">→</span>
+      <span class="step">② AI 提取：条件 / 材料 / 时间</span><span class="arrow">→</span>
+      <span class="step">③ 用户核对团队情况</span><span class="arrow">→</span>
+      <span class="step">④ 输出：已准备 / 缺少 / 需要确认</span>
+      <span class="note-mini">下面三帧 = 第①③④步分别对应一个页面</span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ===== 页面 1：输入通知 ===== -->
+    <div class="frame">
+      <div class="chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="url">zhuban.app/input</span>
+        <span class="frame-tag">页面 01 · 输入通知</span>
+      </div>
+      <div class="body">
+        <div class="stepper"><span class="on">1 输入通知</span><span>2 核对情况</span><span>3 准备清单</span></div>
+
+        <div class="title-line">把通知粘贴进来</div>
+        <div class="sub">微信群通知、邮件正文、公文都行，只要是文字。</div>
+
+        <div class="ph drop">粘贴通知原文到这里<br>（大文本输入框）</div>
+        <span class="note">位置①：输入框多大？请同学评审时定</span>
+
+        <div class="row">
+          <button class="btn btn-dark" onclick="toast('草图占位：点击后进入分析（10/16 接真实功能）')">开始分析</button>
+          <button class="btn btn-ghost" onclick="toast('草图占位：载入一条示例通知')">没有通知？载入示例</button>
+        </div>
+        <div class="sub" style="margin-top:10px;">本阶段先只做文字。截图、PDF 上传后面再加，这版不做。</div>
+
+        <div class="ph result-zone">分析结果区<br>AI 提取到的：截止时间 · 要交的材料 · 报名条件<br><span class="note" style="margin-top:4px;">位置②：放在输入框正下方，还是旁边？</span></div>
+      </div>
+    </div>
+
+    <!-- ===== 页面 2：核对要求 ===== -->
+    <div class="frame">
+      <div class="chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="url">zhuban.app/review</span>
+        <span class="frame-tag">页面 02 · 核对要求</span>
+      </div>
+      <div class="body">
+        <div class="stepper"><span>1 输入通知</span><span class="on">2 核对情况</span><span>3 准备清单</span></div>
+
+        <div class="title-line">通知里要求的，我们队现在是什么情况？</div>
+        <div class="sub">每条要求三选一，结果会决定它进清单哪一类。</div>
+
+        <div class="req">
+          <div class="top"><span class="chip material">材料</span><span class="src">原文第 3 段</span></div>
+          <div class="text">提交不超过 3 分钟的作品演示视频</div>
+          <div class="seg">
+            <button onclick="pick(this)">已具备</button>
+            <button onclick="pick(this)">没有</button>
+            <button onclick="pick(this)">不确定</button>
+          </div>
+        </div>
+
+        <div class="req">
+          <div class="top"><span class="chip material">材料</span><span class="src">原文第 3 段</span></div>
+          <div class="text">项目说明文档（PPT）</div>
+          <div class="seg">
+            <button onclick="pick(this)">已具备</button>
+            <button onclick="pick(this)">没有</button>
+            <button onclick="pick(this)">不确定</button>
+          </div>
+        </div>
+
+        <div class="req">
+          <div class="top"><span class="chip">条件</span><span class="src">原文第 1 段</span></div>
+          <div class="text">团队成员人数：<input class="num-input" value="3"> 人</div>
+          <div class="seg">
+            <button onclick="pick(this)">已符合</button>
+            <button onclick="pick(this)">不符合</button>
+            <button onclick="pick(this)">不确定</button>
+          </div>
+        </div>
+
+        <div class="req">
+          <div class="top"><span class="chip time">时间</span><span class="src">原文第 2 段</span></div>
+          <div class="text">报名截止：10 月 25 日 18:00（只读，不用选）</div>
+        </div>
+
+        <div class="row">
+          <button class="btn btn-dark" onclick="toast('草图占位：生成准备清单（跳到页面 03）')">生成准备清单</button>
+        </div>
+        <span class="note">不确定 = 清单里单独列出的"需要确认"，不替用户猜资格</span>
+      </div>
+    </div>
+
+    <!-- ===== 页面 3：准备清单 ===== -->
+    <div class="frame">
+      <div class="chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="url">zhuban.app/checklist</span>
+        <span class="frame-tag">页面 03 · 准备清单</span>
+      </div>
+      <div class="body">
+        <div class="stepper"><span>1 输入通知</span><span>2 核对情况</span><span class="on">3 准备清单</span></div>
+
+        <div class="ddl-strip">
+          <span>报名截止：10/25 18:00</span>
+          <span>还剩 6 天</span>
+        </div>
+
+        <div class="grp ready">
+          <h4>已准备</h4>
+          <label class="chk"><input type="checkbox" checked>项目说明文档 PPT</label>
+          <label class="chk"><input type="checkbox" checked>报名表草稿</label>
+        </div>
+
+        <div class="grp miss">
+          <h4>还缺少（要去做的事）</h4>
+          <label class="chk"><input type="checkbox">演示视频（还没拍）</label>
+          <label class="chk"><input type="checkbox">成绩单复印件</label>
+        </div>
+
+        <div class="grp maybe">
+          <h4>需要确认（通知没写清）</h4>
+          <label class="chk"><input type="checkbox">是否需要指导老师签字？（建议问组委会）</label>
+        </div>
+
+        <div class="row">
+          <button class="btn btn-dark" onclick="toast('草图占位：保存进度（10/19 做刷新不丢）')">保存进度</button>
+          <button class="btn btn-ghost" onclick="toast('草图占位：重新粘贴一条通知')">重新粘贴通知</button>
+        </div>
+        <span class="note">三类颜色一眼区分；红色"缺少"永远放在最显眼的位置</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 板尾：待评审 -->
+  <div class="board-foot">
+    <b>10/15 请同学帮我看草图，重点确认这 5 件事：</b>
+    <ol>
+      <li>页面 01：输入框大小够不够？分析按钮放在左下还是右下？</li>
+      <li>页面 01：分析结果放在输入框正下方（位置②），还是右侧另一栏？</li>
+      <li>页面 02：每条要求后面"已具备 / 没有 / 不确定"三选，顺手吗？要不要改成别的问法？</li>
+      <li>页面 03：已准备 / 缺少 / 需要确认这三类分法，是不是一眼能看懂还缺什么？</li>
+      <li>三个页面之间这样来回走（粘贴 → 核对 → 清单），有没有哪里绕路？</li>
+    </ol>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  function toast(msg){
+    var t=document.getElementById('toast');
+    t.textContent=msg;t.classList.add('show');
+    clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},1800);
+  }
+  function pick(btn){
+    var sib=btn.parentNode.children;
+    for(var i=0;i<sib.length;i++){sib[i].className='';}
+    var txt=btn.textContent;
+    if(txt.indexOf('已')===0){btn.className='sel-yes';}
+    else if(txt.indexOf('没有')===0||txt.indexOf('不符合')===0){btn.className='sel-no';}
+    else{btn.className='sel-mid';}
+  }
+</script>
+</body>
+</html>

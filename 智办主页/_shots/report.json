@@ -1,0 +1,131 @@
+{
+  "src": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\主页.html",
+  "url": "file:///C:/Users/JingKeying/Doubao/chats/2026-10-18/new-chat/%E6%99%BA%E5%8A%9E%E4%B8%BB%E9%A1%B5/%E4%B8%BB%E9%A1%B5.html",
+  "outdir": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\_shots",
+  "include": [
+    "lint",
+    "screenshots",
+    "structure"
+  ],
+  "shots": {
+    "desktop": {
+      "screenshot": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\_shots\\主页_desktop.jpg",
+      "screenshotBytes": 47460,
+      "truncated": false,
+      "structure": {
+        "title": "智办 · 通知转任务",
+        "firstH1": "智办·通知转任务",
+        "viewport": {
+          "w": 1418,
+          "h": 746
+        },
+        "fullpage": {
+          "w": 1418,
+          "h": 882
+        },
+        "counts": {
+          "section": 0,
+          "h1": 1,
+          "h2": 0,
+          "img": 0,
+          "canvas": 0,
+          "svg": 4,
+          "links": 0,
+          "buttons": 16
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "reportSource": "cdp"
+    },
+    "mobile": {
+      "screenshot": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\_shots\\主页_mobile.jpg",
+      "screenshotBytes": 70195,
+      "truncated": false,
+      "structure": {
+        "title": "智办 · 通知转任务",
+        "firstH1": "智办·通知转任务",
+        "viewport": {
+          "w": 500,
+          "h": 690
+        },
+        "fullpage": {
+          "w": 500,
+          "h": 1618
+        },
+        "counts": {
+          "section": 0,
+          "h1": 1,
+          "h2": 0,
+          "img": 0,
+          "canvas": 0,
+          "svg": 4,
+          "links": 0,
+          "buttons": 16
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "reportSource": "cdp"
+    }
+  },
+  "engine": "chrome_cli",
+  "chromiumExec": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "engineDegraded": true,
+  "engineDegradedReason": "playwright 未装",
+  "elapsedSec": 6.45,
+  "schemaVersion": 2,
+  "status": "pass",
+  "engineInfo": {
+    "name": "chrome_cli",
+    "degraded": true,
+    "degradedReasons": [
+      "playwright 未装"
+    ]
+  },
+  "input": {
+    "original": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\主页.html",
+    "resolvedPath": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\主页.html",
+    "baseUrl": "file:///C:/Users/JingKeying/Doubao/chats/2026-10-18/new-chat/%E6%99%BA%E5%8A%9E%E4%B8%BB%E9%A1%B5/%E4%B8%BB%E9%A1%B5.html",
+    "protocol": "file",
+    "cwd": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat",
+    "mediaMode": {
+      "reducedMotion": true
+    }
+  },
+  "artifacts": {
+    "screenshots": [
+      {
+        "viewport": "desktop",
+        "path": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\_shots\\主页_desktop.jpg",
+        "size": 47460,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      },
+      {
+        "viewport": "mobile",
+        "path": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\_shots\\主页_mobile.jpg",
+        "size": 70195,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      }
+    ]
+  },
+  "summary": {
+    "blocker": 0,
+    "error": 0,
+    "warning": 0,
+    "info": 0
+  },
+  "findings": [],
+  "prioritizedActions": [],
+  "reportPath": "C:\\Users\\JingKeying\\Doubao\\chats\\2026-10-18\\new-chat\\智办主页\\_shots\\report.json"
+}

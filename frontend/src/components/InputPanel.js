@@ -1,6 +1,6 @@
 import { state, setState } from '../state.js'
 import { analyzeNotification } from '../api.js'
-import { ModeCard } from './ModeCard.js'
+import { renderMatter } from './ModeCard.js'
 
 export function renderInputPanel(mount) {
   mount.innerHTML = `
@@ -29,7 +29,7 @@ export function renderInputPanel(mount) {
       zone.innerHTML = `<div class="error-box">解析失败：${state.analyzeError} <button class="btn btn-ghost btn-sm" id="retryBtn">重试</button></div>`
       mount.querySelector('#retryBtn').onclick = runAnalyze
     } else if (state.analyzeResult) {
-      zone.innerHTML = ModeCard(state.analyzeResult)
+      zone.innerHTML = renderMatter(state.analyzeResult)
     } else {
       zone.innerHTML = `<div class="ph">分析结果会显示在这里</div>`
     }

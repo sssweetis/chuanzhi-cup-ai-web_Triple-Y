@@ -1,24 +1,26 @@
-// A 给的三份示例 JSON（写死作演示，接真接口后替换数据源即可）
+// A 给的三份最终示例 JSON（写死作演示，接真接口后替换数据源即可）
 export const sampleSimple = {
-  schema_version: '1.0', mode: 'simple', mode_source: 'auto',
+  schema_version: '1.0', id: 'matter_a1b2c3d4', mode: 'simple', mode_source: 'auto',
   complexity_score: 0.2, detected_features: ['has_deadline'],
   enabled_sections: ['summary', 'schedule', 'source'],
   title: '提交奖学金报名表', priority: 'medium', status: 'not_started',
-  status_source: 'auto', timezone: 'Asia/Shanghai', created_at: '', updated_at: '',
+  status_source: 'auto', timezone: 'Asia/Shanghai',
+  created_at: '2026-10-16T10:00:00+08:00', updated_at: '2026-10-16T10:00:00+08:00',
   deadline: { scope: 'overall', label: '截止时间', due_at: '2026-10-25T18:00:00+08:00', all_day: false,
-    source_ref: { quote: '请于10月25日18:00前提交' } },
+    source_ref: { quote: '请于10月25日18:00前提交奖学金报名表。' } },
   reminders: [{ reminder_id: 'rem_1', offset_minutes: 120, channels: ['app'], enabled: true }],
-  sources: [{ quote: '请于10月25日18:00前提交', page: null }]
+  sources: [{ quote: '请于10月25日18:00前提交奖学金报名表。', page: null }]
 }
 
 export const sampleStandard = {
-  schema_version: '1.0', mode: 'standard', mode_source: 'auto',
+  schema_version: '1.0', id: 'matter_e5f6g7h8', mode: 'standard', mode_source: 'auto',
   complexity_score: 0.5,
   detected_features: ['has_deadline', 'has_multiple_steps', 'has_materials', 'has_attachments', 'has_location'],
   enabled_sections: ['summary', 'schedule', 'content', 'steps', 'materials', 'source'],
   title: '奖学金报名材料提交', priority: 'medium', status: 'not_started',
-  status_source: 'auto', timezone: 'Asia/Shanghai', created_at: '', updated_at: '',
-  deadline: { scope: 'overall', label: '截止时间', due_at: '2026-10-25T18:00:00+08:00',
+  status_source: 'auto', timezone: 'Asia/Shanghai',
+  created_at: '2026-10-16T10:00:00+08:00', updated_at: '2026-10-16T10:00:00+08:00',
+  deadline: { scope: 'overall', label: '截止时间', due_at: '2026-10-25T18:00:00+08:00', all_day: false,
     source_ref: { quote: '10月25日18:00前提交' } },
   reminders: [{ reminder_id: 'rem_1', offset_minutes: 120, channels: ['app'], enabled: true }],
   default_location: { type: 'offline', name: '行政楼302', room: '302', source_ref: { quote: '交至行政楼302' } },
@@ -41,12 +43,13 @@ export const sampleStandard = {
 }
 
 export const sampleComplex = {
-  schema_version: '1.0', mode: 'complex', mode_source: 'auto',
+  schema_version: '1.0', id: 'matter_i9j0k1l2', mode: 'complex', mode_source: 'auto',
   complexity_score: 0.9,
   detected_features: ['has_deadline', 'has_multiple_steps', 'has_sub_steps', 'has_materials', 'has_attachments', 'has_review', 'has_dependencies'],
   enabled_sections: ['summary', 'schedule', 'content', 'steps', 'materials', 'warnings', 'governance', 'source'],
   title: '奖学金报名流程', priority: 'medium', status: 'not_started',
-  status_source: 'auto', timezone: 'Asia/Shanghai', created_at: '', updated_at: '',
+  status_source: 'auto', timezone: 'Asia/Shanghai',
+  created_at: '2026-10-16T10:00:00+08:00', updated_at: '2026-10-16T10:00:00+08:00',
   deadline: { scope: 'overall', label: '截止时间', start_at: '2026-10-20T00:00:00+08:00', due_at: '2026-11-01T23:59:59+08:00',
     source_ref: { quote: '10月20日-25日在线填写报名表' } },
   reminders: [{ reminder_id: 'rem_1', offset_minutes: 120, channels: ['app'], enabled: true }],

@@ -3,52 +3,37 @@ import sys
 import json
 import logging
 import re
-from service import analyze_notification, ask_question
+from service import analyze_notification, update_matter_status, ask_question
 
-# 关掉烦人的网络日志
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpx2").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 
 def print_matter_summary(data, title_prefix=""):
     print(f"\n{title_prefix} 📌 事项：{data.get('title')}")
-    
-    # 1. 检查 DDL (截止时间)
     deadline = data.get("deadline", {})
-    due_at = deadline.get("due_at") if deadline else None
-    if due_at:
-        print(f"⏰ 截止时间：{due_at}")
-        print(f"🔔 提醒：已为您设置提前 2 小时提醒")
-    else:
+    if deadline and deadline.get("due_at"): 
+        print(f"⏰ 截止时间：{deadline.get('due_at')}")
+    else: 
         print(f"⚠️ 警告：原文未提及明确的截止时间，请手动确认设置！")
         
-    # 2. 打印材料状态
     print("\n📋 材料清单：")
-    materials = data.get("materials", [])
-    if not materials:
-        print("  (无材料要求)")
-    for mat in materials:
-        status_icon = "✅ [已准备]" if mat.get("status") == "prepared" else "❌ [缺少]"
-        print(f"  {status_icon} {mat['material_name']}  —— 原文引用：“{mat.get('source_ref', {}).get('quote', '')}”")
+    for mat in data.get("materials", []):
+        print(f"  {'✅ [已准备]' if mat.get('status') == 'prepared' else '❌ [缺少]'} {mat['material_name']}")
         
-    # 3. 打印步骤
-    print("\n📝 执行步骤：")
-    steps = data.get("step_list", [])
-    if not steps:
-        print("  (无详细步骤)")
-    for step in steps:
-        status_icon = "✅ [已完成]" if step['status'] == 'completed' else "⬜ [未完成]"
-        print(f"  {status_icon} {step['title']}")
-        print(f"      ↳ 依据原文：“{step.get('source_ref', {}).get('quote', '')}”")
+    print("\n📝 执行步骤 (流程主线)：")
+    for step in data.get("step_list", []):
+        print(f"  {'✅ [已完成]' if step['status'] == 'completed' else '⬜ [未完成]'} {step['title']}")
+
+    print("\n📌 缺项待办 (具体动作)：")
+    for i, todo in enumerate(data.get("todo_list", [])):
+        print(f"  {i+1}. {'✅' if todo.get('status') == 'completed' else '⬜'} {todo['action']}")
 
 def main():
     print("="*60)
-    print("🎉 智能办事助手 - 真实交互与缺项迭代测试")
+    print("🎉 智能办事助手 (10.21 状态机终极测试)")
     print("="*60)
-
-    print("\n👉 请粘贴你的【真实通知】")
-    print("👉 【操作提示】：在终端里直接右键粘贴。或者按 Shift+Insert。")
-    print("👉 粘贴完成后，敲击回车，手动输入 END 并回车结束粘贴。")
+    print("\n👉 请粘贴你的【真实通知】，输入 END 结束。")
     
     lines = []
     while True:
@@ -56,75 +41,70 @@ def main():
             line = input()
             if line.strip().upper() == 'END': break
             lines.append(line)
-        except EOFError:
-            break
+        except EOFError: break
     
     user_input = "\n".join(lines).strip()
-    if not user_input: 
-        print("⚠️ 通知内容为空，程序退出。")
-        return
+    if not user_input: return
 
-    print("\n🤖 正在解析初始清单，请稍候...")
-    
+    print("\n🤖 正在解析初始清单(调大模型)...")
+    result = analyze_notification(user_input)
+    if not result["success"]: 
+        return print(f"❌ 解析失败：{result['error']}")
+
+    matter_data = result["data"]
+    print_matter_summary(matter_data, "【初始清单】")
+
+    print("\n💬 交互命令：update: 材料 | todo: 序号 完成 | todo: 序号 内容 | exit 退出")
+
     user_materials_list = []
-
-    result = analyze_notification(user_input, user_materials=user_materials_list)
-    if not result["success"]:
-        print(f"❌ 解析失败：{result['error']}")
-        return
-
-    updated_data = result["data"]
-    print_matter_summary(updated_data, "【初始结构化清单】")
-
-    print("\n" + "="*60)
-    print("💬 进入交互模式")
-    print("👉 提问：直接输入问题")
-    print("👉 更新材料：输入 update: 材料名1, 材料名2")
-    print("👉 输入 exit 退出。")
-    print("="*60)
+    current_todos = matter_data.get("todo_list", [])
 
     while True:
-        question = input("\n👤 你问：")
-        if question.strip().lower() == 'exit': break
-        if not question.strip(): continue
+        question = input("\n👤 你问：").strip()
+        if question.lower() == 'exit': break
+        if not question: continue
 
-        # ====== 拦截更新材料指令 ======
-        match = re.match(r'^(update|更新)[\s:：]+(.*)', question.strip(), re.IGNORECASE)
-        
-        if match:
-            new_mats = match.group(2).strip()
-            new_mats_list = [m.strip() for m in new_mats.replace("，", ",").split(",") if m.strip()]
-            
-            # 追加去重逻辑
-            for m in new_mats_list:
-                if m not in user_materials_list:
+        # 1. 更新材料
+        match_update = re.search(r'(update|更新)[\s:：]+(.*)', question, re.IGNORECASE)
+        if match_update:
+            new_mats = match_update.group(2).strip()
+            for m in [m.strip() for m in new_mats.replace("，", ",").split(",") if m.strip()]:
+                if m not in user_materials_list: 
                     user_materials_list.append(m)
             
-            print(f"🤖 收到！系统正在根据您目前拥有的全部材料 {user_materials_list} 重新核对...")
-            
-            result_iter = analyze_notification(user_input, user_materials=user_materials_list)
-            updated_data = result_iter["data"]
-            
-            print_matter_summary(updated_data, "【更新后的结构化清单】")
-            
-            missing = updated_data.get("missing_items", [])
-            if missing:
-                print("\n🚨 系统核对结果：您仍然缺少以下必填材料！")
-                for m in missing:
-                    print(f"  - {m['material_name']}（{m['reason']}）")
-            else:
-                print("\n✅ 太棒了，您的材料已全部备齐！")
+            print(f"🤖 本地核对中...")
+            matter_data = update_matter_status(matter_data, user_materials_list, current_todos)["data"]
+            current_todos = matter_data.get("todo_list", [])
+            print_matter_summary(matter_data, "【更新后清单】")
             continue
 
-        # ====== 正常问答 ======
+        # 2. 修改/完成待办
+        match_todo = re.search(r'todo[\s:：]+(\d+)\s+(.*)', question, re.IGNORECASE)
+        if match_todo:
+            idx = int(match_todo.group(1)) - 1
+            val = match_todo.group(2).strip()
+            
+            # 去除多余字眼
+            if val.startswith("修改为"): val = val[3:].strip()
+            if val.startswith("改为"): val = val[2:].strip()
+            
+            if 0 <= idx < len(current_todos):
+                if val in ["完成", "completed", "done"]: 
+                    current_todos[idx]["status"] = "completed"
+                elif val in ["未完成", "pending"]: 
+                    current_todos[idx]["status"] = "pending"
+                else: 
+                    current_todos[idx]["action"] = val
+            
+            matter_data = update_matter_status(matter_data, user_materials_list, current_todos)["data"]
+            current_todos = matter_data.get("todo_list", [])
+            print_matter_summary(matter_data, "【修改后清单】")
+            continue
+
+        # 3. 问答
         print("🤖 AI 回答：", end="", flush=True)
-        prompt_addon = "\n(注意：你无法直接修改系统清单的状态，只能根据当前清单回答问题。)" 
-        ans_result = ask_question(updated_data, user_input, question + prompt_addon)
-        
-        if ans_result["success"]:
-            print(ans_result["answer"])
-        else:
-            print(f"\n❌ 问答失败：{ans_result['error']}")
+        ans = ask_question(matter_data, user_input, question)
+        print(ans["answer"] if ans["success"] else f"❌ {ans['error']}")
 
 if __name__ == "__main__":
     main()

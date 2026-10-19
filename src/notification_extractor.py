@@ -267,6 +267,37 @@ class Review:
         )
 
 @dataclass
+class Todo:
+    todo_id: str
+    action: str
+    status: str = "pending"
+    source_ref: Optional[SourceRef] = None
+
+    def to_dict(self) -> Dict:
+        result = {"todo_id": self.todo_id, "action": self.action, "status": self.status}
+        if self.source_ref: result["source_ref"] = self.source_ref.to_dict()
+        return result
+
+    @classmethod
+    def from_dict(cls, d: Any) -> "Todo":
+        # 兼容处理：如果大模型直接输出了字符串，比如 ["获取附件1", "编写计划书"]
+        if isinstance(d, str):
+            return cls(
+                todo_id=f"todo_{uuid.uuid4().hex[:6]}",
+                action=d,
+                status="pending",
+                source_ref=None
+            )
+
+        src = _safe_dict(d.get("source_ref"))
+        return cls(
+            todo_id=_safe_str(d.get("todo_id")) or f"todo_{uuid.uuid4().hex[:6]}",
+            action=_safe_str(d.get("action")),
+            status=_safe_str(d.get("status"), "pending"),
+            source_ref=SourceRef.from_dict(src) if src else None,
+        )
+
+@dataclass
 class Step:
     step_id: str
     order: int
@@ -298,13 +329,21 @@ class Step:
         return result
 
     @classmethod
-    def from_dict(cls, d: Dict, is_sub_step: bool = False) -> "Step":
+    def from_dict(cls, d: Any, is_sub_step: bool = False) -> "Step":
+        # 兼容处理：如果大模型在步骤里直接输出了字符串
+        if isinstance(d, str):
+            return cls(
+                step_id=f"step_{uuid.uuid4().hex[:6]}",
+                order=1,
+                title=d,
+                status="not_started"
+            )
+
         src = _safe_dict(d.get("source_ref"))
         rev = _safe_dict(d.get("review"))
         sid = d.get("sub_step_id") if is_sub_step else d.get("step_id")
         if not sid: sid = d.get("step_id") or d.get("sub_step_id") or f"step_{uuid.uuid4().hex[:6]}"
         
-        # 兼容处理：如果大模型输出了字符串数组 ["step_1"]，转成对象数组
         raw_deps = _safe_list(d.get("dependencies"))
         parsed_deps = []
         for dep in raw_deps:
@@ -379,6 +418,7 @@ class Matter:
     attachments: List[Attachment] = field(default_factory=list)
     materials: List[Material] = field(default_factory=list)
     step_list: List[Step] = field(default_factory=list)
+    todo_list: List[Todo] = field(default_factory=list)
     warning_list: List[Warning] = field(default_factory=list)
     sources: List[SourceRef] = field(default_factory=list)
 
@@ -397,6 +437,7 @@ class Matter:
         if self.attachments: result["attachments"] = [a.to_dict() for a in self.attachments]
         if self.materials: result["materials"] = [m.to_dict() for m in self.materials]
         if self.step_list: result["step_list"] = [s.to_dict() for s in self.step_list]
+        if self.todo_list: result["todo_list"] = [t.to_dict() for t in self.todo_list]
         if self.warning_list: result["warning_list"] = [w.to_dict() for w in self.warning_list]
         if self.sources: result["sources"] = [s.to_dict() for s in self.sources]
         return result
@@ -424,12 +465,13 @@ class Matter:
         m.attachments = [Attachment.from_dict(a) for a in _safe_list(d.get("attachments"))]
         m.materials = [Material.from_dict(x) for x in _safe_list(d.get("materials"))]
         m.step_list = [Step.from_dict(s, is_sub_step=False) for s in _safe_list(d.get("step_list"))]
+        m.todo_list = [Todo.from_dict(t) for t in _safe_list(d.get("todo_list"))]
         m.warning_list = [Warning.from_dict(w) for w in _safe_list(d.get("warning_list"))]
         m.sources = [SourceRef.from_dict(s) for s in _safe_list(d.get("sources"))]
         return m
 
 MODE_FORBIDDEN_FIELDS = {
-    "simple": {"owner", "assignees", "participants", "contact", "default_location", "key_points", "attachments", "materials", "step_list", "warning_list", "permissions", "audit_log", "comments", "recurrence"},
+    "simple": {"owner", "assignees", "participants", "contact", "default_location", "key_points", "attachments", "materials", "step_list", "todo_list", "warning_list", "permissions", "audit_log", "comments", "recurrence"},
     "standard": {"recurrence", "permissions", "audit_log", "comments"},
     "complex": set(),
 }
@@ -483,7 +525,8 @@ MATTER_SCHEMA = {
         "title": {"type": "string"}, "priority": {"enum": ["low", "medium", "high", "urgent"]},
         "status": {"enum": ["not_started", "in_progress", "completed", "cancelled", "skipped", "failed", "delayed", "pending_review", "submitted", "need_resubmit"]},
         "timezone": {"type": "string"}, "deadline": {"type": ["object", "null"]}, "step_list": {"type": "array"},
-        "materials": {"type": "array"}, "attachments": {"type": "array"}, "warning_list": {"type": "array"}, "sources": {"type": "array"}
+        "materials": {"type": "array"}, "attachments": {"type": "array"}, "warning_list": {"type": "array"}, "sources": {"type": "array"},
+        "todo_list": {"type": "array"}
     },
 }
 
@@ -528,7 +571,7 @@ class LLMClient:
                 messages=[{"role": "system", "content": system_content}, {"role": "user", "content": notification_text}],
                 temperature=0,
                 response_format={"type": "json_object"},
-                stream=True, # 开启流式输出防超时
+                stream=True,
             )
             
             raw_text = ""
@@ -536,29 +579,20 @@ class LLMClient:
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                     raw_text += chunk.choices[0].delta.content
             
-            # ====== 新增：大模型输出清洗与防呆兜底 ======
+            raw_text = raw_text.strip()
+            if raw_text.startswith("```json"): raw_text = raw_text[7:]
+            elif raw_text.startswith("```"): raw_text = raw_text[3:]
+            if raw_text.endswith("```"): raw_text = raw_text[:-3]
             raw_text = raw_text.strip()
             
-            # 1. 去除 Claude 等模型爱加的 Markdown 标记
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            elif raw_text.startswith("```"):
-                raw_text = raw_text[3:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            # 2. 检查是否为空
             if not raw_text:
                 raise ValueError("大模型返回了空内容，可能是供应商接口超时或拒绝服务")
                 
-            # 3. 解析 JSON
             try:
                 raw = json.loads(raw_text)
             except json.JSONDecodeError as e:
                 logger.error(f"JSON解析失败！原始返回内容：\n{raw_text}")
                 raise ValueError(f"大模型输出格式错误，无法转为JSON: {e}")
-            # ==========================================
 
             logger.info("[%s] API 完成：mode=%s", request_id, raw.get("mode"))
             return raw
@@ -598,13 +632,8 @@ class MatterExtractor:
     def process(self, source: str) -> Tuple[Optional[Matter], Optional[str]]:
         raw = self.llm.extract(source, self.system_prompt)
         
-        # 数据格式容错兜底：如果大模型把 deadline 直接输出成字符串
         if isinstance(raw.get("deadline"), str):
-            raw["deadline"] = {
-                "scope": "overall",
-                "label": "截止时间",
-                "due_at": raw["deadline"]
-            }
+            raw["deadline"] = {"scope": "overall", "label": "截止时间", "due_at": raw["deadline"]}
 
         features = _safe_list(raw.get("detected_features"))
         score = round(recompute_complexity(features), 3)
@@ -629,32 +658,7 @@ class MatterExtractor:
         return matter, None
 
 if __name__ == "__main__":
-    import time
     from prompt import SYSTEM_PROMPT
-
     llm = LLMClient()
-    print(f"[当前配置] URL: {llm.base_url} | Model: {llm.model} | Key: {'已配置' if llm.api_key else '未配置'}")
-
-    samples = [
-        "请于10月25日18:00前提交奖学金报名表。",
-        "奖学金报名：10月25日18:00前提交报名表（附件1）、成绩单、身份证复印件，交至行政楼302，需本人签字。",
-        "奖学金报名流程：10月20日-25日在线填写报名表（附件1），上传身份证和成绩单；10月26-28日王老师审核，审核通过后才能缴费；10月29-30日缴费100元；11月1日打印准考证。",
-    ]
-
     extractor = MatterExtractor(llm, SYSTEM_PROMPT)
-
-    for i, text in enumerate(samples, 1):
-        print(f"\n===== 样本 {i} =====")
-        print("输入：", text)
-        matter, err = extractor.process(text)
-        if err:
-            print("失败：", err)
-            continue
-        print(f"mode={matter.mode}  score={matter.complexity_score}  sections={matter.enabled_sections}")
-        print(json.dumps(matter.to_dict(), ensure_ascii=False, indent=2))
-        
-        time.sleep(3)
-
-    print("\n===== 已调度提醒 =====")
-    for j in extractor.scheduler.jobs:
-        print(f"[{j.fire_at.isoformat()}] {j.title} → {j.channels}")
+    print("extractor ready")

@@ -1,6 +1,7 @@
 import { state, setState } from '../state.js'
 import { analyzeNotification } from '../api.js'
 import { renderMatter } from './ModeCard.js'
+import { SAMPLES } from '../mockMatters.js'
 
 export function renderInputPanel(mount) {
   mount.innerHTML = `
@@ -17,6 +18,10 @@ export function renderInputPanel(mount) {
       <div class="attach-note">附件暂只记录文件名；文件与大段文字的汇总接口预留在这里，接大模型后自动生成摘要。</div>
       <div class="in-foot">
         <button class="btn btn-primary" id="analyzeBtn">AI 智能解析</button>
+      </div>
+      <div class="demo-row" id="demoRow">
+        <span class="demo-label">没接后端？先看示例：</span>
+        ${SAMPLES.map((s, i) => `<button class="tool demo-btn" data-i="${i}">${s.label}</button>`).join('')}
       </div>
       <div class="result-zone" id="resultZone"></div>
     </div>`
@@ -51,6 +56,10 @@ export function renderInputPanel(mount) {
   }
 
   mount.querySelector('#analyzeBtn').onclick = runAnalyze
+  mount.querySelectorAll('.demo-btn').forEach(b => b.onclick = () => {
+    setState({ analyzing: false, analyzeError: '', analyzeResult: SAMPLES[Number(b.dataset.i)].data })
+    paint()
+  })
   mount.querySelector('#attachBtn').onclick = () => mount.querySelector('#fileInput').click()
   mount.querySelector('#fileInput').onchange = (e) => {
     const box = mount.querySelector('#chipBox')

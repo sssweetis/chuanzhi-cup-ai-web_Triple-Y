@@ -43,6 +43,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from service import analyze_notification  # noqa: E402
 from requirement_checker import check_requirements  # noqa: E402
+from mock_extractor import mock_extract  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -123,46 +124,17 @@ def _fail(error: str) -> dict:
 
 # ==================== 无 Key 时的演示兜底 ====================
 
-_MOCK_HINTS = {
-    "complex": ("流程", "审核", "依赖", "子步骤", "缴费", "准考证", "答辩", "负责人", "学院"),
-    "standard": ("材料", "附件", "成绩单", "复印件", "地点", "盖章", "签字", "行政楼", "办公室"),
-}
-
-
 def _mock_matter(notification_text: str) -> Optional[dict]:
-    """从仓库自带的 samples/ 里挑一份示例 Matter（内容虚构、结构真实）。
+    """无 Key 时按输入内容生成 Matter（离线关键词 Mock，见 mock_extractor.py）。
 
-    A 的新版抽取模块无 Key 时会直接报错；为了让前端在没有 Key 时也能联调，
-    这里用 samples/simple|standard|complex.json 作为兜底。
+    与之前"从 samples/ 里挑固定示例"不同：标题、截止时间、材料、步骤都来自用户输入，
+    所以演示时不会出现"输入网络安全、结果却是奖学金"的串数据现象。
     """
-    text = notification_text or ""
-    mode = "simple"
-    for name in ("complex", "standard"):
-        if any(k in text for k in _MOCK_HINTS[name]):
-            mode = name
-            break
-
-    parent = Path(__file__).resolve().parent
-    for path in (parent.parent / "samples" / (mode + ".json"), parent / "samples" / (mode + ".json")):
-        if not path.exists():
-            continue
-        try:
-            with path.open(encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            continue
-        now = datetime.now(timezone(timedelta(hours=8))).isoformat()
-        data["id"] = "matter_mock_" + uuid.uuid4().hex[:8]
-        data["created_at"] = now
-        data["updated_at"] = now
-        data["mode"] = mode
-        data["mode_source"] = "mock"
-        # 兜底数据也要能"对上原文"：把用户输入当作出处，
-        # 这样缺项核对里的关键词判断（视频/说明文档/签字…）仍然生效
-        if text.strip():
-            data["sources"] = [{"quote": text.strip()[:800]}]
-        return data
-    return None
+    try:
+        return mock_extract(notification_text)
+    except Exception as e:
+        logger.warning("离线 Mock 生成失败：%s", e)
+        return None
 
 
 def _analyze_with_fallback(text: str) -> dict:

@@ -166,7 +166,18 @@ def _mock_matter(notification_text: str) -> Optional[dict]:
 
 
 def _analyze_with_fallback(text: str) -> dict:
-    """先走 A 的真实抽取；无 Key 且 LLM_ENABLE_MOCK=1 时退回示例 Matter。"""
+    """先走 A 的真实抽取；无 Key 且 LLM_ENABLE_MOCK=1 时直接返回示例 Matter。
+
+    注意：A 的新版模块在没有 Key 时会抛 RuntimeError（并在日志里打一整段 traceback）。
+    演示时那段红字容易被误认为故障，所以这里先判断"确实没 Key"，直接走兜底，
+    不去触发异常；只有"有 Key 但调用失败"时才让 A 的代码走它自己的错误路径。
+    """
+    if LLM_ENABLE_MOCK and not (os.getenv("LLM_API_KEY") or "").strip():
+        mock = _mock_matter(text)
+        if mock:
+            logger.info("LLM_API_KEY 未配置，按 Mock 模式返回示例 Matter（内容虚构，结构真实）")
+            return {"success": True, "data": mock, "error": None}
+
     result = analyze_notification(text)
     if (not result.get("success") and LLM_ENABLE_MOCK
             and "LLM_API_KEY" in str(result.get("error") or "")):

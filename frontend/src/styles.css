@@ -171,3 +171,24 @@ td.c-act{width:96px;text-align:right;}
 .modal{background:#fff;border-radius:18px;width:420px;max-width:100%;padding:26px;}
 .modal h3{margin-bottom:16px;}
 .modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+
+/* === A 版式：emoji 分区 + 标题行 + 流程树 === */
+.matter-card { padding: 4px 2px; }
+.mc-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.mc-title-row .mc-title { margin: 0; font-size: 20px; }
+.mc-cat { color: #8a86c2; font-size: 13px; margin: 4px 0 10px; }
+.mc-block { margin: 8px 0; }
+.mc-line { font-size: 14px; line-height: 1.9; color: #3a3859; }
+.mc-count { color: #e06666; font-weight: 600; padding-left: 24px; }
+.mc-sec { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; margin: 14px 0 6px; color: #4a4780; }
+.mc-bullet { margin: 0 0 0 18px; padding: 0; }
+.mc-bullet li { line-height: 1.9; font-size: 14px; }
+.step-tree { list-style: none; margin: 0 0 0 4px; padding: 0; }
+.step-tree > li { margin: 8px 0; }
+.step-head { font-size: 14px; }
+.step-num { font-size: 16px; margin-right: 4px; }
+.tree-branch { margin: 2px 0 2px 28px; }
+.tree-line { font-size: 13px; color: #5a5878; line-height: 1.8; }
+.tree-warn { color: #c0392b; }
+.mat-list { list-style: none; margin: 0; padding: 0; }
+.mat-list li { line-height: 2; }

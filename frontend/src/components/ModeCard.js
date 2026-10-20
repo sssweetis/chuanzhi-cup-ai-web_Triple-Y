@@ -1,21 +1,17 @@
-// 按后端返回的 Matter 对象 + enabled_sections 渲染（A 的 5 条新规则）
-// 1. 只渲染 enabled_sections 里出现的区块；字段缺失直接跳过，绝不白屏
-// 2. 步骤按数组索引渲染，忽略 order 字段
-// 3. dependencies 数组画依赖连线
-// 4. template_attachment_id → attachments 里找 ID，显示"下载模板"
-// 5. source_ref.quote 做成悬浮提示
-const MODE_LABEL = { simple: '极简', standard: '标准', complex: '完整流程' }
+// 按 A 的 UI 建议稿版式渲染：emoji 分区标题 + 标题右侧优先级徽章
+// 仍遵守 5 条规则：只画 enabled_sections、步骤按索引、dependencies 连线、材料模板跳转、出处悬浮
+const PRIORITY_LABEL = { low: '低优先级', medium: '中优先级', high: '高优先级', urgent: '紧急' }
 const PRIORITY_CLS = { low: 'p-low', medium: 'p-mid', high: 'p-high', urgent: 'p-urgent' }
-const PRIORITY_LABEL = { low: '低', medium: '普通', high: '较急', urgent: '紧急' }
 const MAT_STATUS = { pending: '未准备', uploaded: '已上传', submitted: '已提交', approved: '已通过', rejected: '已驳回' }
 const MAT_STATUS_CLS = { pending: 'st-pending', uploaded: 'st-mid', submitted: 'st-mid', approved: 'st-ok', rejected: 'st-bad' }
 const STEP_STATUS = { not_started: '未开始', pending: '待处理', in_progress: '进行中', completed: '已完成', done: '已完成' }
+const STEP_NUM = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
 
 function fmtTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
   const p = n => String(n).padStart(2, '0')
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 function countdown(iso) {
   if (!iso) return ''
@@ -28,14 +24,13 @@ function countdown(iso) {
 function hasSection(m, key) {
   return Array.isArray(m.enabled_sections) && m.enabled_sections.includes(key)
 }
-function targetName(t) {
-  if (!t) return ''
-  return typeof t === 'string' ? t : (t.name || '')
-}
-// 规则 5：source_ref.quote → 悬浮提示
 function tip(quote) {
   if (!quote) return ''
   return `<span class="src-tip" title="原文：${quote.replace(/"/g, '&quot;')}">出处</span>`
+}
+// 分区小标题：📋 材料清单 这种 emoji + 标题的形式
+function sec(emoji, text) {
+  return `<div class="mc-sec"><span class="mc-sec-emoji">${emoji}</span>${text}</div>`
 }
 
 export function renderMatter(m) {
@@ -44,98 +39,82 @@ export function renderMatter(m) {
 }
 
 function _render(m) {
-  let html = ''
+  let html = '<div class="matter-card">'
 
-  // summary
+  // 顶部：标题 + 右侧优先级
   if (hasSection(m, 'summary')) {
-    html += `<div class="mc-head">`
-    html += `<span class="mode-chip">${MODE_LABEL[m.mode] || m.mode}</span>`
-    if (m.complexity_score != null) html += `<span class="score-chip">复杂度 ${m.complexity_score}</span>`
-    if (m.category) html += `<span class="cat-chip">${m.category}</span>`
-    if (m.priority && m.priority !== 'low') html += `<span class="p-chip ${PRIORITY_CLS[m.priority] || ''}">${PRIORITY_LABEL[m.priority] || m.priority}</span>`
-    html += `<h1 class="mc-title">${m.title || '未命名任务'}</h1>`
-    if (m.background) html += `<div class="mc-bg">${m.background}</div>`
-    const t = targetName(m.target)
-    if (t) html += `<div class="mc-row">面向：${t}</div>`
-    if (m.status) html += `<div class="mc-row">状态：<span class="st-badge st-mid">${STEP_STATUS[m.status] || m.status}</span></div>`
-    html += `</div>`
+    const prio = m.priority && m.priority !== 'low'
+      ? `<span class="p-chip ${PRIORITY_CLS[m.priority] || ''}">${PRIORITY_LABEL[m.priority] || m.priority}</span>` : ''
+    const cat = m.category ? `<div class="mc-cat">📌 ${m.category}</div>` : ''
+    html += `<div class="mc-title-row"><h1 class="mc-title">${m.title || '未命名任务'}</h1>${prio}</div>${cat}`
   }
 
-  // schedule
-  if (hasSection(m, 'schedule') && m.deadline) {
-    const due = m.deadline.due_at
-    html += `<div class="ddl-card">
-      <div class="ddl-label">${m.deadline.label || '截止时间'}</div>
-      <div class="ddl-time">${due ? fmtTime(due) : ''}</div>
-      ${due ? `<div class="ddl-count">${countdown(due)}</div>` : ''}
-      ${m.deadline.start_at ? `<div class="ddl-start">开始：${fmtTime(m.deadline.start_at)}</div>` : ''}
+  // ⏰ 截止
+  if (hasSection(m, 'schedule') && m.deadline && m.deadline.due_at) {
+    const range = (m.deadline.start_at && m.deadline.end_at)
+      ? `<div class="mc-line">📅 整体：${fmtTime(m.deadline.start_at).slice(0, 10)} ~ ${fmtTime(m.deadline.end_at).slice(0, 10)}</div>`
+      : ''
+    html += `<div class="mc-block">
+      <div class="mc-line">⏰ 截止：${fmtTime(m.deadline.due_at)}</div>
+      <div class="mc-line mc-count">${countdown(m.deadline.due_at)}</div>
+      ${range}
     </div>`
     if (Array.isArray(m.reminders) && m.reminders.length) {
       const r = m.reminders[0]
-      html += `<div class="mc-row">提醒：提前 ${Math.round(r.offset_minutes / 60)} 小时（${(r.channels || []).join(' / ')}）</div>`
+      html += `<div class="mc-line">🔔 提醒：提前 ${Math.round((r.offset_minutes || 0) / 60)} 小时</div>`
     }
-    if (m.default_location) html += `<div class="mc-row">地点：${m.default_location.name || ''}</div>`
-  }
-
-  // content
-  if (hasSection(m, 'content')) {
-    if (Array.isArray(m.key_points) && m.key_points.length) {
-      html += `<div class="mc-sub">注意事项</div><ul class="mc-list">${m.key_points.map(k => `<li>${k}</li>`).join('')}</ul>`
-    }
-    if (Array.isArray(m.attachments) && m.attachments.length) {
-      html += `<div class="mc-sub">附件</div><div class="att-row">${m.attachments.map(a =>
-        a.attachment_url
-          ? `<a class="btn btn-ghost btn-sm" href="${a.attachment_url}" target="_blank" rel="noopener">⬇ ${a.attachment_name}</a>`
-          : `<span class="btn btn-ghost btn-sm" style="opacity:.6">📎 ${a.attachment_name}</span>`
-      ).join('')}</div>`
+    if (m.default_location && m.default_location.name) {
+      html += `<div class="mc-line">📍 地点：${m.default_location.name}</div>`
     }
   }
 
-  // steps：规则 2，按数组索引渲染
+  // ✍️ 注意（key_points）
+  if (hasSection(m, 'content') && Array.isArray(m.key_points) && m.key_points.length) {
+    html += sec('✍️', '注意')
+    html += `<ul class="mc-bullet">${m.key_points.map(k => `<li>· ${k}</li>`).join('')}</ul>`
+  }
+
+  // 🔁 流程时间线（complex 步骤，按索引排）
   if (hasSection(m, 'steps') && Array.isArray(m.step_list) && m.step_list.length) {
     const matMap = {}
     ;(m.materials || []).forEach(x => { matMap[x.material_id] = x.material_name })
-    html += `<div class="mc-sub">流程（${m.step_list.length} 步）</div><ol class="mc-steps">`
+    html += sec('🔁', `流程时间线（${m.step_list.length} 步）`)
+    html += `<ol class="step-tree">`
     m.step_list.forEach((s, i) => {
+      const num = STEP_NUM[i] || (i + 1)
       let dueAt = s.due_at
       if (!dueAt && s.due_at_inherited_from === 'overall' && m.deadline) dueAt = m.deadline.due_at
-      const mats = Array.isArray(s.materials) && s.materials.length
-        ? `<div class="mc-row">材料：${s.materials.map(id => matMap[id] || id).join('、')}</div>` : ''
-      // 规则 3：dependencies 连线
-      const dep = Array.isArray(s.dependencies) && s.dependencies.length
-        ? `<div class="dep-chain">← 需先完成：${s.dependencies.map(d => {
-            const dstep = m.step_list.find(x => x.step_id === d.step_id)
-            return dstep ? dstep.title : d.step_id
-          }).join('、')}</div>` : ''
-      const owner = s.owner ? `<div class="mc-row">负责人：${s.owner.name}</div>` : ''
-      const review = s.review && s.review.required ? `<div class="dep-chain">需审核：${s.review.reviewer ? s.review.reviewer.name : ''}</div>` : ''
-      const subs = Array.isArray(s.sub_step_list) && s.sub_step_list.length
-        ? `<ul class="substeps">${s.sub_step_list.map(sub => `<li>↳ ${sub.title} <span class="st-badge st-pending">${STEP_STATUS[sub.status] || sub.status || ''}</span></li>`).join('')}</ul>` : ''
+      const dueTxt = dueAt ? `（${fmtTime(dueAt).slice(5, 16)}）` : ''
       const done = s.status === 'completed' || s.status === 'done'
+      const subs = Array.isArray(s.sub_step_list) && s.sub_step_list.length
+        ? `<div class="tree-branch">${s.sub_step_list.map(sub => `<div class="tree-line">├ ${sub.title}</div>`).join('')}</div>` : ''
+      const owner = s.owner ? `<div class="tree-line">👤 ${s.owner.name}</div>` : ''
+      const review = s.review && s.review.required
+        ? `<div class="tree-line tree-warn">⚠ ${s.review.reviewer ? s.review.reviewer.name + ' 审核通过才能继续' : '需审核'}</div>` : ''
       html += `<li>
-        <span class="step-dot">${i + 1}</span>
-        <span class="step-title">${s.title}</span>
-        ${tip(s.source_ref && s.source_ref.quote)}
-        <span class="st-badge ${done ? 'st-ok' : 'st-pending'}">${STEP_STATUS[s.status] || s.status || ''}</span>
-        ${dueAt ? `<span class="step-due">${fmtTime(dueAt)}</span>` : ''}
-        ${owner}${review}${mats}${dep}${subs}
+        <div class="step-head"><span class="step-num">${num}</span> ${s.title} ${dueTxt}
+          ${tip(s.source_ref && s.source_ref.quote)}
+          <span class="st-badge ${done ? 'st-ok' : 'st-pending'}">${STEP_STATUS[s.status] || s.status || ''}</span>
+        </div>
+        ${subs}${owner}${review}
       </li>`
     })
     html += `</ol>`
   }
 
-  // materials：规则 4，template_attachment_id 找附件
+  // 📋 材料清单（含 ☐ + [下载模板]）
   if (hasSection(m, 'materials') && Array.isArray(m.materials) && m.materials.length) {
     const attMap = {}
     ;(m.attachments || []).forEach(a => { attMap[a.attachment_id] = a })
-    html += `<div class="mc-sub">材料清单（${m.materials.length} 项）</div><ul class="mc-list">`
+    html += sec('📋', `材料清单（${m.materials.length} 项）`)
+    html += `<ul class="mat-list">`
     m.materials.forEach(mat => {
       const att = attMap[mat.template_attachment_id]
       const url = att && att.attachment_url
-      const typeTag = mat.material_type === 'optional' ? '<span class="type-tag opt">可选</span>' : '<span class="type-tag req">必填</span>'
-      const tpl = url ? ` <a class="tpl-link" href="${url}" target="_blank" rel="noopener">下载模板</a>` : ''
+      const typeTag = mat.material_type === 'optional' ? '（可选）' : '（必填）'
+      const tpl = url ? ` <a class="tpl-link" href="${url}" target="_blank" rel="noopener">[下载模板]</a>` : ''
       html += `<li><label class="chk"><input type="checkbox" data-mat="${mat.material_id}">
-        <b>${mat.material_name}</b> ${typeTag}
+        ☐ <b>${mat.material_name}</b> ${typeTag}
         <span class="st-badge ${MAT_STATUS_CLS[mat.status] || 'st-pending'}">${MAT_STATUS[mat.status] || mat.status || ''}</span>
         ${tpl} ${tip(mat.source_ref && mat.source_ref.quote)}
       </label></li>`
@@ -143,28 +122,43 @@ function _render(m) {
     html += `</ul>`
   }
 
-  // warnings
+  // 📎 附件
+  if (hasSection(m, 'content') && Array.isArray(m.attachments) && m.attachments.length) {
+    html += sec('📎', '附件')
+    html += `<div class="att-row">${m.attachments.map(a =>
+      a.attachment_url
+        ? `<a class="btn btn-ghost btn-sm" href="${a.attachment_url}" target="_blank" rel="noopener">⬇ ${a.attachment_name}</a>`
+        : `<span class="btn btn-ghost btn-sm" style="opacity:.6">📎 ${a.attachment_name}</span>`
+    ).join('')}</div>`
+  }
+
+  // ⚠️ 预警
   if (hasSection(m, 'warnings') && Array.isArray(m.warning_list) && m.warning_list.length) {
+    html += sec('⚠️', '预警')
     html += m.warning_list.map(w => `<div class="warn warn-${w.severity || 'medium'}">
-      <div>${w.message}</div>
+      <div>· ${w.message}</div>
       ${w.action && w.action.suggestion ? `<div class="warn-sug">建议：${w.action.suggestion}</div>` : ''}
     </div>`).join('')
   }
 
-  // governance
+  // 👥 相关人
   if (hasSection(m, 'governance')) {
     const people = []
     if (m.owner) people.push('负责人：' + (m.owner.name || ''))
     if (Array.isArray(m.assignees) && m.assignees.length) people.push('参与人：' + m.assignees.map(a => a.name).join('、'))
-    if (people.length) html += `<div class="mc-sub">协作</div>${people.map(p => `<div class="mc-row">${p}</div>`).join('')}`
+    if (people.length) {
+      html += sec('👥', '相关人')
+      html += people.map(p => `<div class="mc-line">· ${p}</div>`).join('')
+    }
   }
 
-  // source
+  // 📄 原文出处
   if (hasSection(m, 'source') && Array.isArray(m.sources) && m.sources.length) {
-    html += `<details class="src-detail"><summary>原文出处（${m.sources.length}）</summary>`
+    html += `<details class="src-detail"><summary>📄 原文出处（${m.sources.length}）</summary>`
     html += m.sources.map(s => `<div class="src-quote">${s.page != null ? `<span class="page-tag">第 ${s.page} 页</span>` : ''}“${s.quote}”</div>`).join('')
     html += `</details>`
   }
 
+  html += '</div>'
   return html || '<div class="ph">未从通知中提取到可展示内容</div>'
 }

@@ -44,3 +44,28 @@ const r = await checkRequirements({
 // r.data.profile_issues     → "原文要求提交视频，你说还没准备"
 // r.data.ready_ratio        → 进度条
 ```
+
+## 联调演示页（不用构建，浏览器直接打开）
+
+`backend/for-frontend/demo.html` 是 C 侧的**完整链路演示**：先启动后端，再用浏览器打开它即可。
+
+- 粘贴通知 → 分析 → 展示标题 / 截止时间 / 材料清单 / 步骤 / 风险预警
+- 勾选「已准备好的材料」+ 勾选「我还没有准备视频」→ 点核对 → 显示还缺什么、哪些需要确认
+- 输入、结果、勾选状态**自动存 localStorage，刷新不丢**（10/19 交付物）
+
+> 这个页面是给验收/前端参考用的实现（原生 JS、单文件）。B 的正式页面按自己的工程结构做即可。
+
+## 本地保存 / 恢复（10/19 里程碑）
+
+`storage.js`：`saveSession` / `loadSession` / `clearSession` / `saveHistory` / `listHistory`
+
+```js
+import { saveSession, loadSession } from "@/utils/storage";
+
+// 分析成功、勾选变化后
+saveSession({ text, matter, checkedIds, profile });
+
+// 页面加载时
+const s = loadSession();
+if (s) { textarea.value = s.text; renderMatter(s.matter); }
+```

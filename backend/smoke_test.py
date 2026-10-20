@@ -82,11 +82,11 @@ r = json.loads(body)
 check("非法请求体走统一契约", r.get("success") is False and r.get("error"), f"error={r.get('error')}")
 
 # 4. 超长与边界
-long_text = "关于校园活动的通知内容。" * 300
+long_text = "关于校园活动的通知内容。" * 1500
 _, _, body, _ = call("POST", "/api/analyze", {"text": long_text})
 r = json.loads(body)
 check(f"超长文本（{len(long_text)} 字）被拦截",
-      r.get("success") is False and str(len(long_text)) in (r.get("error") or ""), f"error={r.get('error')}")
+      r.get("success") is False and "通知过长" in (r.get("error") or ""), f"error={r.get('error')}")
 
 r = json.loads(call("POST", "/api/analyze", {"text": "a" * 3000})[2])
 check("3000 字边界正常返回", r.get("success") is True)

@@ -44,7 +44,8 @@ export const analyzeNotification = (text) =>
   request('/api/analyze', { body: { text } })
 
 // POST /api/check
-// body: { notification_id, profile:{team_size,has_doc,has_video,has_teacher_confirm}, checked_material_ids:string[] }
+// body: { matter?: Matter对象, profile:{people_count,has_doc,has_video,has_teacher_confirm}, checked_material_ids:string[] }
+// 返回 checked / missing_required / missing_optional / need_confirm / profile_issues / summary
 export const checkProfile = (payload) =>
   request('/api/check', { body: payload })
 

@@ -11,7 +11,7 @@ function boot() {
   app.innerHTML = `
     <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
     <div class="app">
-      <div class="topbar"><h1>智办<span>·</span>通知转任务</h1><div class="slogan">粘贴一段通知，剩下的我帮你记着</div></div>
+      <div class="topbar"><h1>Triple Y<span>·</span>通知转任务</h1><div class="slogan">粘贴一段通知，剩下的我帮你记着</div></div>
       <div class="layout">
         <div class="left">
           <div id="profileMount"></div>
@@ -26,8 +26,8 @@ function boot() {
     </div>`
   renderAll()
   state.onUpdate = renderAll
-  // 倒计时剩余时间每 60 秒自动刷新一次
-  setInterval(renderAll, 60000)
+  // 倒计时只刷新任务列表，避免重渲染输入框/表单导致正在填的内容被重置
+  setInterval(() => renderTaskList(document.getElementById('listMount')), 60000)
 }
 
 function renderAll() {

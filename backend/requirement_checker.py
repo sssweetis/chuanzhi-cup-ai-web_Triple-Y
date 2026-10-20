@@ -48,6 +48,18 @@ DEFAULT_PROFILE_CHECKS: List[Dict[str, Any]] = [
         "message": "原文要求推荐信，你说还没准备",
     },
     {
+        "key": "has_teacher_confirm",
+        "label": "老师签字",
+        "keywords": ["指导老师", "老师确认", "老师签字"],
+        "message": "原文要求老师签字/确认，你说还没办",
+    },
+    {
+        "key": "has_doc",
+        "label": "说明文档",
+        "keywords": ["说明文档", "说明书", "使用说明", "操作说明"],
+        "message": "原文要求提交说明文档，你说还没有",
+    },
+    {
         "key": "has_signature",
         "label": "签字 / 盖章",
         "keywords": ["签字", "签名", "盖章", "公章"],

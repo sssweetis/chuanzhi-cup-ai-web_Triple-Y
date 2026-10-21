@@ -47,6 +47,7 @@ from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
 from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
 from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
+from pdf_analyzer import PDF_MAX_BYTES, PDF_MAX_PAGES, extract_pdf_text  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -405,6 +406,55 @@ def evidence_index(req: EvidenceIndexRequest):
     }
 
 
+# ==================== 10/25：PDF 文字提取 → Matter ====================
+
+@app.get("/api/analyze-pdf/limits")
+def analyze_pdf_limits():
+    return {
+        "success": True,
+        "data": {
+            "field": "file",
+            "content_type": "multipart/form-data",
+            "max_files": 1,
+            "max_bytes": PDF_MAX_BYTES,
+            "max_mb": round(PDF_MAX_BYTES / 1024 / 1024, 1),
+            "max_pages": PDF_MAX_PAGES,
+            "formats": ["PDF"],
+            "note": "仅支持文字型 PDF（可复制文字）；扫描件请改用截图",
+        },
+        "error": None,
+    }
+
+
+@app.post("/api/analyze-pdf", response_model=AnalyzeResponse)
+async def analyze_pdf(file: UploadFile = File(...)):
+    """上传文字型 PDF → 提取文字 → 走 /api/analyze 同一套抽取。"""
+    ctype = (file.content_type or "").lower().split(";")[0].strip()
+    name = (file.filename or "").lower()
+    if ctype != "application/pdf" and not name.endswith(".pdf"):
+        return _fail("仅支持 PDF 文件（收到：%s）" % (ctype or "未知"))
+
+    raw = await file.read(PDF_MAX_BYTES + 1)
+    if not raw:
+        return _fail("PDF 内容为空，请重新选择")
+    if len(raw) > PDF_MAX_BYTES:
+        return _fail("PDF 不能超过 10 MB（当前 %.1f MB）" % (len(raw) / 1024 / 1024))
+
+    try:
+        text, meta, err = extract_pdf_text(raw)
+    except Exception as e:
+        logger.exception("PDF 提取异常：%s", e)
+        return _fail(f"PDF 提取异常：{e}")
+    if err:
+        return _fail(err)
+
+    logger.info("PDF 解析：%s pages=%s chars=%s", file.filename, meta.get("pages"), meta.get("chars"))
+    result = _analyze_with_fallback(text)
+    if not result.get("success"):
+        return result
+    return {"success": True, "data": result.get("data"), "error": None}
+
+
 # ==================== 统一错误兜底 ====================
 
 @app.exception_handler(RequestValidationError)
@@ -412,7 +462,7 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     """请求体不是合法 JSON / 字段类型不对时，也返回统一契约，而不是 FastAPI 默认的 422。"""
     logger.warning("请求体校验失败：%s", exc.errors())
     return JSONResponse(status_code=200, content=_fail(
-        '请求体格式错误：请检查字段与类型（JSON: text / matter，multipart: image）'))
+        '请求体格式错误：请检查字段与类型（JSON: text / matter；multipart: image / file）'))
 
 
 @app.exception_handler(Exception)

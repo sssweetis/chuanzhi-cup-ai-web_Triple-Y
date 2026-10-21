@@ -74,6 +74,20 @@ def build_prepare_list(matter, checked_material_ids=None):
                 "source_ref": {},
             })
 
+    # 用勾选状态联动待办：绑定材料已勾选 → completed；依赖全部完成 → 解除 blocked
+    done_ids = set()
+    for t in todos:
+        mid = str(t.get("material_id") or "")
+        if mid and (mid in checked or (t.get("action") or "") in checked):
+            t["status"] = "completed"
+            done_ids.add(t.get("todo_id"))
+    for t in todos:
+        deps = t.get("depends_on") or []
+        if t.get("status") == "blocked" and deps:
+            all_done = all((d in done_ids) or any(x.get("todo_id") == d and x.get("status") == "completed" for x in todos) for d in deps)
+            if all_done:
+                t["status"] = "pending"
+
     if not materials:
         summary = "该通知未要求提交材料，无需准备清单"
     elif missing_items:

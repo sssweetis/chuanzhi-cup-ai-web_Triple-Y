@@ -168,16 +168,19 @@ def _steps(text, materials):
 
 
 def _todos(materials, deadline, text):
-    """根据材料（缺项）生成具体待办：动宾短语 + 溯源（A 的 Todo 结构）。"""
+    """根据材料生成具体待办；状态遵循 A 的枚举：
+       pending / completed / blocked（前置未完成） / need_confirm（信息不明确）"""
     todos = []
     for m in materials:
         action = MATERIAL_TODO.get(m["material_name"], "准备%s并检查是否符合要求" % m["material_name"])
         if m.get("material_type") == "optional":
             action = "（选填）" + action
+        status = "need_confirm" if (m.get("material_type") or "") == "unspecified" else "pending"
         todos.append({
             "todo_id": "todo_%d" % (len(todos) + 1),
             "action": action,
-            "status": "pending",
+            "status": status,
+            "material_id": m.get("material_id"),
             "source_ref": m.get("source_ref") or {"quote": text[:60]},
         })
     if materials:
@@ -190,7 +193,8 @@ def _todos(materials, deadline, text):
         todos.append({
             "todo_id": "todo_%d" % (len(todos) + 1),
             "action": action,
-            "status": "pending",
+            "status": "blocked",                 # 材料没备齐前，提交动作被阻塞
+            "depends_on": [t["todo_id"] for t in todos],
             "source_ref": {"quote": text[:60]},
         })
     return todos

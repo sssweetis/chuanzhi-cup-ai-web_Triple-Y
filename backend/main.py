@@ -35,7 +35,7 @@ from dotenv import load_dotenv
 #    如果放到后面加载，.env 里的 LLM_ENABLE_MOCK=1 会失效。
 load_dotenv()
 
-from fastapi import FastAPI, Request  # noqa: E402
+from fastapi import FastAPI, File, Request, UploadFile  # noqa: E402
 from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
@@ -45,6 +45,7 @@ from service import analyze_notification  # noqa: E402
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
+from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -320,13 +321,59 @@ def get_prepare_list(matter_id: str):
     return {"success": True, "data": record, "error": None}
 
 
+# ==================== 10/23：图片解析（截图 → Matter）====================
+
+@app.get("/api/analyze-image/limits")
+def analyze_image_limits():
+    """前端启动时读一次，用同一套限制做提示（避免前后端文案不一致）。"""
+    return {
+        "success": True,
+        "data": {
+            "field": "image",
+            "content_type": "multipart/form-data",
+            "max_files": 1,
+            "max_bytes": IMAGE_MAX_BYTES,
+            "max_mb": round(IMAGE_MAX_BYTES / 1024 / 1024, 1),
+            "formats": list(ALLOWED_IMAGE_TYPES.values()),
+        },
+        "error": None,
+    }
+
+
+@app.post("/api/analyze-image", response_model=AnalyzeResponse)
+async def analyze_image(image: UploadFile = File(...)):
+    """截图 → Matter。字段名 image，multipart/form-data，返回与 /api/analyze 相同的信封。"""
+    ctype = (image.content_type or "").lower().split(";")[0].strip()
+    if ctype not in ALLOWED_IMAGE_TYPES:
+        return _fail("仅支持 JPG / PNG / WEBP 格式（收到：%s）" % (ctype or "未知"))
+
+    raw = await image.read(IMAGE_MAX_BYTES + 1)
+    if not raw:
+        return _fail("图片内容为空，请重新选择")
+    if len(raw) > IMAGE_MAX_BYTES:
+        return _fail("图片不能超过 5 MB（当前 %.1f MB）" % (len(raw) / 1024 / 1024))
+
+    try:
+        matter, err = analyze_image_bytes(raw, image.filename or "image", ctype)
+    except Exception as e:
+        logger.exception("图片解析异常：%s", e)
+        return _fail(f"图片解析异常：{e}")
+
+    if err:
+        return _fail(err)
+    if not isinstance(matter, dict) or not matter:
+        return _fail("图片解析失败：结果为空")
+    return {"success": True, "data": matter, "error": None}
+
+
 # ==================== 统一错误兜底 ====================
 
 @app.exception_handler(RequestValidationError)
 async def on_validation_error(request: Request, exc: RequestValidationError):
     """请求体不是合法 JSON / 字段类型不对时，也返回统一契约，而不是 FastAPI 默认的 422。"""
     logger.warning("请求体校验失败：%s", exc.errors())
-    return JSONResponse(status_code=200, content=_fail('请求体格式错误，应为 {"text": "通知原文"}'))
+    return JSONResponse(status_code=200, content=_fail(
+        '请求体格式错误：请检查字段与类型（JSON: text / matter，multipart: image）'))
 
 
 @app.exception_handler(Exception)

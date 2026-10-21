@@ -10,3 +10,4 @@ python-dotenv>=1.0.1
 # --- 抽取服务（A 的模块）---
 openai>=1.0.0
 jsonschema>=4.0.0
+python-multipart>=0.0.9

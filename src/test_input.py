@@ -20,17 +20,22 @@ def print_matter_summary(data, title_prefix=""):
     print("\n📋 材料清单：")
     for mat in data.get("materials", []):
         mark = "✅ [已准备]" if mat.get("status") == "prepared" else "❌ [缺少]"
-        print(f"  {mark} {mat.get('material_name')} ({mat.get('material_id')})")
+        suggest = " [💡AI建议]" if mat.get("is_suggestion") else ""
+        quote = f"  (依据: {mat.get('source_ref', {}).get('quote', '')})" if mat.get("source_ref") else ""
+        print(f"  {mark} {mat.get('material_name')}{suggest}{quote}")
 
     print("\n📝 执行步骤：")
     for step in data.get("step_list", []):
         mark = "✅ [已完成]" if step.get("status") == "completed" else "⬜ [未完成]"
-        print(f"  {mark} {step.get('title')}")
+        suggest = " [💡AI建议]" if step.get("is_suggestion") else ""
+        quote = f"  (依据: {step.get('source_ref', {}).get('quote', '')})" if step.get("source_ref") else ""
+        print(f"  {mark} {step.get('title')}{suggest}{quote}")
 
     print("\n📌 缺项待办：")
     for i, todo in enumerate(data.get("todo_list", [])):
         mark = "✅" if todo.get("status") == "completed" else "⬜"
-        print(f"  {i+1}. {mark} {todo.get('action')} [{todo.get('todo_id')}]")
+        quote = f"  (依据: {todo.get('source_ref', {}).get('quote', '')})" if todo.get("source_ref") else ""
+        print(f"  {i+1}. {mark} {todo.get('action')}{quote}")
 
     if data.get("missing_items"):
         print("\n🔴 缺项：")
@@ -39,7 +44,7 @@ def print_matter_summary(data, title_prefix=""):
 
 def main():
     print("=" * 60)
-    print("🎉 智能办事助手 (大模型常识推理版)")
+    print("🎉 智能办事助手 (10.22 RAG溯源与建议标识版)")
     print("=" * 60)
     print("\n👉 请粘贴你的【真实通知】，输入 END 结束。")
 

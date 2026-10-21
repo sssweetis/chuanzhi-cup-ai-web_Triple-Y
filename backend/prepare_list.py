@@ -55,12 +55,16 @@ def build_prepare_list(matter, checked_material_ids=None):
     for t in (matter.get("todo_list") or []):
         if not isinstance(t, dict) or not t.get("action"):
             continue
-        todos.append({
+        item = {
             "todo_id": t.get("todo_id") or "todo_%d" % (len(todos) + 1),
             "action": t["action"],
             "status": t.get("status") or "pending",
             "source_ref": t.get("source_ref") or {},
-        })
+        }
+        for key in ("depends_on", "step_id", "material_id"):   # A 新版 todo 的可选字段
+            if t.get(key):
+                item[key] = t[key]
+        todos.append(item)
     if not todos:
         for m in missing_items:
             todos.append({

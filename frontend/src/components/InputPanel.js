@@ -146,19 +146,25 @@ export function renderInputPanel(mount) {
         state.resultFromImage = false
       }
       setState({ analyzing: false, analyzeResult: data })
-      // 自动拉准备清单，把 todo_list 合并进任务清单
+      // 自动拉准备清单，按 generated/todo_id 覆盖式合并进任务清单
       try {
         const prep = await prepareList({ matter: data })
         const due = data && data.deadline && data.deadline.due_at
           ? data.deadline.due_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
-        const existing = new Set(state.tasks.map(t => t.title))
         const srcText = text
-        ;(prep.todo_list || []).forEach(todo => {
-          if (!existing.has(todo.action)) {
-            state.tasks.push({ id: Date.now() + Math.random(), title: todo.action, date: due, done: false, sourceText: srcText })
-            existing.add(todo.action)
-          }
-        })
+        const generated = (prep.todo_list || []).map((t, i) => ({
+          id: 9000 + i,
+          todo_id: t.todo_id,
+          title: t.action,
+          date: due,
+          done: t.status === 'completed',
+          doneAt: t.status === 'completed' ? new Date().toISOString().slice(0, 10) : '',
+          generated: true,
+          source_ref: t.source_ref || null,
+          sourceText
+        }))
+        const manual = state.tasks.filter(t => !t.generated)
+        state.tasks = [...manual, ...generated]
       } catch (e) { /* prepare-list 失败不阻塞主流程 */ }
     } catch (err) {
       const tip = /连不上后端|Failed to fetch|NetworkError/i.test(String(err))

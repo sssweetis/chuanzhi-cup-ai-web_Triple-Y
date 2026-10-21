@@ -23,6 +23,20 @@ MATERIAL_RULES = [
     ("宣传海报设计图", ("海报",)),
     ("获奖证明", ("获奖", "证书")),
 ]
+MATERIAL_TODO = {
+    "报名表": "准备报名表并确认是否需要签字",
+    "申报表": "准备申报表并请指导老师签字",
+    "成绩单": "打印成绩单并检查是否为最新版本",
+    "身份证复印件": "复印身份证并确认清晰可读",
+    "作品演示视频": "制作作品演示视频并检查时长",
+    "项目说明文档": "整理项目说明文档（Word / PDF）",
+    "指导老师推荐意见": "联系指导老师出具推荐意见",
+    "作品原创性声明": "签署作品原创性声明",
+    "个人基本信息表": "填写个人基本信息表",
+    "宣传海报设计图": "完成宣传海报设计图并导出 PDF",
+    "获奖证明": "准备获奖证明复印件",
+}
+
 OPTIONAL_HINTS = ("选填", "可选", "如有", "非必须", "非必需", "自愿")
 ACTION_RE = re.compile(r"(提交|发送|交至|上交|上传|报名(?!表)|填写|审核|审批|缴费|打印|答辩|"
                        r"签字|盖章|准备|参加|领取|确认|登录)")
@@ -153,6 +167,35 @@ def _steps(text, materials):
     return steps
 
 
+def _todos(materials, deadline, text):
+    """根据材料（缺项）生成具体待办：动宾短语 + 溯源（A 的 Todo 结构）。"""
+    todos = []
+    for m in materials:
+        action = MATERIAL_TODO.get(m["material_name"], "准备%s并检查是否符合要求" % m["material_name"])
+        if m.get("material_type") == "optional":
+            action = "（选填）" + action
+        todos.append({
+            "todo_id": "todo_%d" % (len(todos) + 1),
+            "action": action,
+            "status": "pending",
+            "source_ref": m.get("source_ref") or {"quote": text[:60]},
+        })
+    if materials:
+        action = "提交准备好的全部材料"
+        loc = LOCATION_RE.search(text)
+        if loc:
+            action += "至%s" % loc.group(1)
+        if deadline:
+            action += "（截止 %s）" % deadline.strftime("%m-%d %H:%M")
+        todos.append({
+            "todo_id": "todo_%d" % (len(todos) + 1),
+            "action": action,
+            "status": "pending",
+            "source_ref": {"quote": text[:60]},
+        })
+    return todos
+
+
 def _title(text):
     s = (_sentences(text) or ["通知事项"])[0].strip()
     m = re.search(r"关于(.+?)(?:的通知|通知)", s)
@@ -248,6 +291,9 @@ def mock_extract(text: str) -> dict:
             data["materials"] = materials
         if steps:
             data["step_list"] = steps
+        todos = _todos(materials, deadline, source)
+        if todos:
+            data["todo_list"] = todos
         loc = LOCATION_RE.search(source)
         if loc:
             data["default_location"] = {"name": loc.group(1)}

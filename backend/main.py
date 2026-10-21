@@ -44,6 +44,7 @@ from pydantic import BaseModel  # noqa: E402
 from service import analyze_notification  # noqa: E402
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
+from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -252,6 +253,71 @@ def check(req: CheckRequest):
         return _fail(f"核对异常：{e}")
 
     return {"success": True, "data": {"matter": matter, **detail}, "error": None}
+
+
+# ==================== 10/21：准备清单（生成 / 保存 / 读取）====================
+
+class PrepareListRequest(BaseModel):
+    matter: Optional[dict] = None
+    text: Optional[str] = None
+    checked_material_ids: Optional[List[str]] = None
+
+
+class SavePrepareListRequest(BaseModel):
+    matter_id: str
+    todo_list: List[dict]
+    checked_material_ids: Optional[List[str]] = None
+
+
+def _matter_from_request(matter, text):
+    """matter 优先；没有就用 text 现场解析（含 Mock 兜底）。"""
+    if isinstance(matter, dict) and matter:
+        return matter, None
+    notice_text = (text or "").strip()
+    if not notice_text:
+        return None, _fail("请提供已解析结果（matter）或通知原文（text）")
+    if 0 < MAX_TEXT_LENGTH < len(notice_text):
+        return None, _fail(f"通知过长，当前{len(notice_text)}字符，上限{MAX_TEXT_LENGTH}")
+    result = _analyze_with_fallback(notice_text)
+    if not result.get("success"):
+        return None, result
+    return result.get("data"), None
+
+
+@app.post("/api/prepare-list", response_model=AnalyzeResponse)
+def prepare_list(req: PrepareListRequest):
+    """生成准备清单：缺项材料 + 逐条待办（不调用大模型）。"""
+    matter, error = _matter_from_request(req.matter, req.text)
+    if error:
+        return error
+    try:
+        data = build_prepare_list(matter, req.checked_material_ids)
+    except Exception as e:
+        logger.exception("生成准备清单失败：%s", e)
+        return _fail(f"生成准备清单失败：{e}")
+    return {"success": True, "data": data, "error": None}
+
+
+@app.post("/api/prepare-list/save", response_model=AnalyzeResponse)
+def save_prepare_list_endpoint(req: SavePrepareListRequest):
+    """保存（修改后的）准备清单，刷新/换浏览器可恢复。"""
+    try:
+        record = save_prepare_list(req.matter_id, req.todo_list, req.checked_material_ids)
+    except ValueError as e:
+        return _fail(str(e))
+    except Exception as e:
+        logger.exception("保存准备清单失败：%s", e)
+        return _fail(f"保存准备清单失败：{e}")
+    return {"success": True, "data": record, "error": None}
+
+
+@app.get("/api/prepare-list/{matter_id}", response_model=AnalyzeResponse)
+def get_prepare_list(matter_id: str):
+    """读取上次保存的准备清单。"""
+    record = load_prepare_list(matter_id)
+    if not record:
+        return _fail("没有找到保存的准备清单")
+    return {"success": True, "data": record, "error": None}
 
 
 # ==================== 统一错误兜底 ====================

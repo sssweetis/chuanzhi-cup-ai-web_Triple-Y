@@ -2,11 +2,13 @@ import { state, daysLeft } from '../state.js'
 
 export function renderCalendar(mount) {
   const now = new Date()
-  const y = now.getFullYear(), m = now.getMonth()
+  const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate()
+  let view = { y: curY, m: curM }
+
   mount.innerHTML = `
     <div class="card">
       <div class="cal-head">
-        <div class="ym">${y}年${m + 1}月</div>
+        <div class="ym" id="calYMD"></div>
         <div class="cal-nav">
           <button class="icon-btn" data-m="-1">‹</button>
           <button class="icon-btn" data-m="1">›</button>
@@ -21,26 +23,55 @@ export function renderCalendar(mount) {
         <span><i style="background:#8b86e8"></i>普通待办</span>
       </div>
     </div>`
-  let view = { y, m }
+
+  function pad(n) { return String(n).padStart(2, '0') }
+
   function draw() {
+    mount.querySelector('#calYMD').textContent = `${view.y}年${view.m + 1}月`
     const first = new Date(view.y, view.m, 1).getDay()
     const days = new Date(view.y, view.m + 1, 0).getDate()
     const prevDays = new Date(view.y, view.m, 0).getDate()
-    const todayStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    const hot = {}
-    state.tasks.forEach(t => { if (!t.done && daysLeft(t.date) <= 2) hot[t.date] = 1 })
+    const todayStr = `${curY}-${pad(curM + 1)}-${pad(curD)}`
+    const hot = {}, overdue = {}
+    state.tasks.forEach(t => {
+      if (t.done) return
+      const n = daysLeft(t.date)
+      if (n < 0) overdue[t.date] = 1
+      else if (n <= 2) hot[t.date] = 1
+    })
+    // 按日期分组任务，做 hover 提示
+    const byDate = {}
+    state.tasks.forEach(t => {
+      if (!byDate[t.date]) byDate[t.date] = []
+      byDate[t.date].push(t.title)
+    })
     let cells = []
     for (let i = 0; i < first; i++) cells.push(`<td class="other blank">${prevDays - first + 1 + i}</td>`)
     for (let d = 1; d <= days; d++) {
-      const ds = `${view.y}-${String(view.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const ds = `${view.y}-${pad(view.m + 1)}-${pad(d)}`
       const cls = ds === todayStr ? 'today' : ''
-      const dot = state.tasks.some(t => !t.done && t.date === ds)
-        ? `<span class="dot ${hot[ds] ? 'hot' : ''}"></span>` : ''
-      cells.push(`<td class="${cls}">${d}${dot}</td>`)
+      const dayTasks = byDate[ds] || []
+      const dot = dayTasks.length
+        ? `<span class="dot ${overdue[ds] ? 'over' : hot[ds] ? 'hot' : ''}"></span>` : ''
+      const tip = dayTasks.length ? ` title="${dayTasks.join('\n')}"` : ''
+      const tdCls = [cls, dayTasks.length ? 'has-task' : ''].filter(Boolean).join(' ')
+      cells.push(`<td class="${tdCls}" data-date="${dayTasks.length ? ds : ''}"${tip}><span class="cal-num">${d}</span>${dot}</td>`)
     }
     const rows = []
     for (let i = 0; i < cells.length; i += 7) rows.push('<tr>' + cells.slice(i, i + 7).join('') + '</tr>')
     mount.querySelector('#calBody').innerHTML = rows.join('')
+    // 点有任务的日期 → 滚动到任务清单并高亮当天任务
+    mount.querySelectorAll('td.has-task').forEach(td => td.onclick = () => {
+      const ds = td.dataset.date
+      state.focusDate = ds
+      import('../state.js').then(({ setState }) => {
+        setState({})
+        setTimeout(() => {
+          const row = document.querySelector(`.task-row.focus-row`)
+          if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 50)
+      })
+    })
   }
   draw()
   mount.querySelectorAll('.icon-btn').forEach(b => b.onclick = () => {

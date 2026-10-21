@@ -35,7 +35,7 @@ from dotenv import load_dotenv
 #    如果放到后面加载，.env 里的 LLM_ENABLE_MOCK=1 会失效。
 load_dotenv()
 
-from fastapi import FastAPI, Request  # noqa: E402
+from fastapi import FastAPI, File, Request, UploadFile  # noqa: E402
 from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
@@ -44,6 +44,9 @@ from pydantic import BaseModel  # noqa: E402
 from service import analyze_notification  # noqa: E402
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
+from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
+from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
+from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -254,13 +257,162 @@ def check(req: CheckRequest):
     return {"success": True, "data": {"matter": matter, **detail}, "error": None}
 
 
+# ==================== 10/21：准备清单（生成 / 保存 / 读取）====================
+
+class PrepareListRequest(BaseModel):
+    matter: Optional[dict] = None
+    text: Optional[str] = None
+    checked_material_ids: Optional[List[str]] = None
+
+
+class SavePrepareListRequest(BaseModel):
+    matter_id: str
+    todo_list: List[dict]
+    checked_material_ids: Optional[List[str]] = None
+
+
+def _matter_from_request(matter, text):
+    """matter 优先；没有就用 text 现场解析（含 Mock 兜底）。"""
+    if isinstance(matter, dict) and matter:
+        return matter, None
+    notice_text = (text or "").strip()
+    if not notice_text:
+        return None, _fail("请提供已解析结果（matter）或通知原文（text）")
+    if 0 < MAX_TEXT_LENGTH < len(notice_text):
+        return None, _fail(f"通知过长，当前{len(notice_text)}字符，上限{MAX_TEXT_LENGTH}")
+    result = _analyze_with_fallback(notice_text)
+    if not result.get("success"):
+        return None, result
+    return result.get("data"), None
+
+
+@app.post("/api/prepare-list", response_model=AnalyzeResponse)
+def prepare_list(req: PrepareListRequest):
+    """生成准备清单：缺项材料 + 逐条待办（不调用大模型）。"""
+    matter, error = _matter_from_request(req.matter, req.text)
+    if error:
+        return error
+    try:
+        data = build_prepare_list(matter, req.checked_material_ids)
+    except Exception as e:
+        logger.exception("生成准备清单失败：%s", e)
+        return _fail(f"生成准备清单失败：{e}")
+    return {"success": True, "data": data, "error": None}
+
+
+@app.post("/api/prepare-list/save", response_model=AnalyzeResponse)
+def save_prepare_list_endpoint(req: SavePrepareListRequest):
+    """保存（修改后的）准备清单，刷新/换浏览器可恢复。"""
+    try:
+        record = save_prepare_list(req.matter_id, req.todo_list, req.checked_material_ids)
+    except ValueError as e:
+        return _fail(str(e))
+    except Exception as e:
+        logger.exception("保存准备清单失败：%s", e)
+        return _fail(f"保存准备清单失败：{e}")
+    return {"success": True, "data": record, "error": None}
+
+
+@app.get("/api/prepare-list/{matter_id}", response_model=AnalyzeResponse)
+def get_prepare_list(matter_id: str):
+    """读取上次保存的准备清单。"""
+    record = load_prepare_list(matter_id)
+    if not record:
+        return _fail("没有找到保存的准备清单")
+    return {"success": True, "data": record, "error": None}
+
+
+# ==================== 10/23：图片解析（截图 → Matter）====================
+
+@app.get("/api/analyze-image/limits")
+def analyze_image_limits():
+    """前端启动时读一次，用同一套限制做提示（避免前后端文案不一致）。"""
+    return {
+        "success": True,
+        "data": {
+            "field": "image",
+            "content_type": "multipart/form-data",
+            "max_files": 1,
+            "max_bytes": IMAGE_MAX_BYTES,
+            "max_mb": round(IMAGE_MAX_BYTES / 1024 / 1024, 1),
+            "formats": list(ALLOWED_IMAGE_TYPES.values()),
+        },
+        "error": None,
+    }
+
+
+@app.post("/api/analyze-image", response_model=AnalyzeResponse)
+async def analyze_image(image: UploadFile = File(...)):
+    """截图 → Matter。字段名 image，multipart/form-data，返回与 /api/analyze 相同的信封。"""
+    ctype = (image.content_type or "").lower().split(";")[0].strip()
+    if ctype not in ALLOWED_IMAGE_TYPES:
+        return _fail("仅支持 JPG / PNG / WEBP 格式（收到：%s）" % (ctype or "未知"))
+
+    raw = await image.read(IMAGE_MAX_BYTES + 1)
+    if not raw:
+        return _fail("图片内容为空，请重新选择")
+    if len(raw) > IMAGE_MAX_BYTES:
+        return _fail("图片不能超过 5 MB（当前 %.1f MB）" % (len(raw) / 1024 / 1024))
+
+    try:
+        matter, err = analyze_image_bytes(raw, image.filename or "image", ctype)
+    except Exception as e:
+        logger.exception("图片解析异常：%s", e)
+        return _fail(f"图片解析异常：{e}")
+
+    if err:
+        return _fail(err)
+    if not isinstance(matter, dict) or not matter:
+        return _fail("图片解析失败：结果为空")
+    return {"success": True, "data": matter, "error": None}
+
+
+# ==================== 10/22：查看依据（要求 → 原文）====================
+
+class EvidenceRequest(BaseModel):
+    matter: Optional[dict] = None
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+
+
+class EvidenceIndexRequest(BaseModel):
+    matter: Optional[dict] = None
+
+
+@app.post("/api/evidence", response_model=AnalyzeResponse)
+def evidence(req: EvidenceRequest):
+    """点一条要求（材料/步骤/待办/附件/截止/预警/要点），返回支持它的原文片段。"""
+    if not isinstance(req.matter, dict) or not req.matter:
+        return _fail("请提供已解析结果（matter）")
+    if not req.target_type or req.target_id is None:
+        return _fail("请提供 target_type 与 target_id")
+    if req.target_type not in TARGET_TYPES:
+        return _fail("target_type 不支持：%s（可选：%s）" % (req.target_type, " / ".join(TARGET_TYPES)))
+    return {"success": True, "data": find_evidence(req.matter, req.target_type, req.target_id), "error": None}
+
+
+@app.post("/api/evidence/index", response_model=AnalyzeResponse)
+def evidence_index(req: EvidenceIndexRequest):
+    """一次性返回所有条目的依据（前端可预取，用于给每条要求挂「查看依据」）。"""
+    if not isinstance(req.matter, dict) or not req.matter:
+        return _fail("请提供已解析结果（matter）")
+    items = build_evidence_index(req.matter)
+    return {
+        "success": True,
+        "data": {"items": items, "total": len(items),
+                 "suggestion_count": sum(1 for i in items if i["is_suggestion"])},
+        "error": None,
+    }
+
+
 # ==================== 统一错误兜底 ====================
 
 @app.exception_handler(RequestValidationError)
 async def on_validation_error(request: Request, exc: RequestValidationError):
     """请求体不是合法 JSON / 字段类型不对时，也返回统一契约，而不是 FastAPI 默认的 422。"""
     logger.warning("请求体校验失败：%s", exc.errors())
-    return JSONResponse(status_code=200, content=_fail('请求体格式错误，应为 {"text": "通知原文"}'))
+    return JSONResponse(status_code=200, content=_fail(
+        '请求体格式错误：请检查字段与类型（JSON: text / matter，multipart: image）'))
 
 
 @app.exception_handler(Exception)

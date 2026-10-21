@@ -24,9 +24,9 @@ function countdown(iso) {
 function hasSection(m, key) {
   return Array.isArray(m.enabled_sections) && m.enabled_sections.includes(key)
 }
-function tip(quote) {
-  if (!quote) return ''
-  return `<span class="src-tip" title="原文：${quote.replace(/"/g, '&quot;')}">出处</span>`
+function tip(quote, type, id) {
+  if (!quote && !type) return ''
+  return `<button class="src-btn" data-quote="${(quote || '').replace(/"/g, '&quot;')}" data-type="${type || ''}" data-id="${id || ''}">出处</button>`
 }
 // 分区小标题：📋 材料清单 这种 emoji + 标题的形式
 function sec(emoji, text) {
@@ -93,7 +93,7 @@ function _render(m) {
         ? `<div class="tree-line tree-warn">⚠ ${s.review.reviewer ? s.review.reviewer.name + ' 审核通过才能继续' : '需审核'}</div>` : ''
       html += `<li>
         <div class="step-head"><span class="step-num">${num}</span> ${s.title} ${dueTxt}
-          ${tip(s.source_ref && s.source_ref.quote)}
+          ${tip(s.source_ref && s.source_ref.quote, 'step', s.step_id)}
           <span class="st-badge ${done ? 'st-ok' : 'st-pending'}">${STEP_STATUS[s.status] || s.status || ''}</span>
         </div>
         ${subs}${owner}${review}
@@ -102,7 +102,7 @@ function _render(m) {
     html += `</ol>`
   }
 
-  // 📋 材料清单（含 ☐ + [下载模板]）
+  // 📋 材料清单（只读展示；勾选只在下面"我们队的情况"做）
   if (hasSection(m, 'materials') && Array.isArray(m.materials) && m.materials.length) {
     const attMap = {}
     ;(m.attachments || []).forEach(a => { attMap[a.attachment_id] = a })
@@ -113,11 +113,13 @@ function _render(m) {
       const url = att && att.attachment_url
       const typeTag = mat.material_type === 'optional' ? '（可选）' : '（必填）'
       const tpl = url ? ` <a class="tpl-link" href="${url}" target="_blank" rel="noopener">[下载模板]</a>` : ''
-      html += `<li><label class="chk"><input type="checkbox" data-mat="${mat.material_id}">
-        ☐ <b>${mat.material_name}</b> ${typeTag}
-        <span class="st-badge ${MAT_STATUS_CLS[mat.status] || 'st-pending'}">${MAT_STATUS[mat.status] || mat.status || ''}</span>
-        ${tpl} ${tip(mat.source_ref && mat.source_ref.quote)}
-      </label></li>`
+      const st = mat.status === 'uploaded' || mat.status === 'approved' || mat.status === 'submitted'
+        ? `<span class="st-badge st-ok">已准备</span>`
+        : `<span class="st-badge st-pending">未准备</span>`
+      html += `<li>
+        <b>${mat.material_name}</b> ${typeTag} ${st}
+        ${tpl} ${tip(mat.source_ref && mat.source_ref.quote, 'material', mat.material_id)}
+      </li>`
     })
     html += `</ul>`
   }
@@ -137,7 +139,7 @@ function _render(m) {
     html += sec('⚠️', '预警')
     html += m.warning_list.map(w => `<div class="warn warn-${w.severity || 'medium'}">
       <div>· ${w.message}</div>
-      ${w.action && w.action.suggestion ? `<div class="warn-sug">建议：${w.action.suggestion}</div>` : ''}
+      ${w.action && w.action.suggestion ? `<div class="warn-sug">建议：${String(w.action.suggestion).replace(/^建议[：:]\s*/, '')}</div>` : ''}
     </div>`).join('')
   }
 
@@ -157,6 +159,31 @@ function _render(m) {
     html += `<details class="src-detail"><summary>📄 原文出处（${m.sources.length}）</summary>`
     html += m.sources.map(s => `<div class="src-quote">${s.page != null ? `<span class="page-tag">第 ${s.page} 页</span>` : ''}“${s.quote}”</div>`).join('')
     html += `</details>`
+  }
+
+  // 🔄 原要求 / 新要求 对比（补充通知场景）
+  if (m.diff && (Array.isArray(m.diff.changes) && m.diff.changes.length)) {
+    html += sec('🔄', '补充通知对比')
+    html += `<div class="diff-row">`
+    html += `<div class="diff-col diff-old"><div class="diff-head">原要求</div>`
+    ;(m.diff.old_requirements || []).forEach(r => { html += `<div class="diff-item">· ${r}</div>` })
+    html += `</div>`
+    html += `<div class="diff-col diff-new"><div class="diff-head">新要求</div>`
+    ;(m.diff.new_requirements || []).forEach(r => { html += `<div class="diff-item">· ${r}</div>` })
+    html += `</div>`
+    html += `</div>`
+    html += `<div class="diff-changes">`
+    m.diff.changes.forEach(c => {
+      const tag = c.type === 'added' ? '新增' : c.type === 'removed' ? '删除' : c.type === 'changed' ? '修改' : '提示'
+      html += `<div class="diff-change diff-${c.type || 'info'}"><span class="diff-tag">${tag}</span> ${c.text || c.note || ''}</div>`
+    })
+    html += `</div>`
+    // 受影响待办 + 确认更新按钮
+    if (Array.isArray(m.diff.affected_todos) && m.diff.affected_todos.length) {
+      html += `<div class="affected-box"><b>受影响的待办：</b><ul>`
+      m.diff.affected_todos.forEach(t => html += `<li>· ${t}</li>`)
+      html += `</ul><button class="btn btn-primary btn-sm" id="confirmUpdateBtn">确认更新任务清单</button></div>`
+    }
   }
 
   html += '</div>'

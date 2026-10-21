@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triple Y · 开场动画预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #dcd8f7 0%, #fbe6d4 50%, #cfe3f7 100%);
+    overflow-x: hidden;
+  }
+  /* === Splash === */
+  .splash {
+    position: fixed; inset: 0; z-index: 99;
+    background: linear-gradient(135deg, #8b86e8 0%, #b8aef0 100%);
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity .6s ease, visibility .6s;
+  }
+  .splash.hide { opacity: 0; visibility: hidden; }
+  .splash-logo-circle {
+    display: flex; justify-content: center; margin-bottom: 20px;
+    opacity: 0; transform: scale(.5);
+    animation: logoIn .7s cubic-bezier(.2,.8,.2,1) .1s forwards;
+  }
+  .splash-logo {
+    color: #fff; font-size: 76px; font-weight: 900; letter-spacing: 4px;
+    opacity: 0; transform: scale(.6);
+    animation: logoIn .8s cubic-bezier(.2,.8,.2,1) .2s forwards;
+    text-shadow: 0 4px 24px rgba(0,0,0,.15);
+  }
+  .splash-sub {
+    color: rgba(255,255,255,.9); font-size: 20px; margin-top: 16px; letter-spacing: 1px;
+    opacity: 0; animation: fadeIn .6s .6s forwards;
+  }
+  @keyframes logoIn { to { opacity: 1; transform: scale(1); } }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  /* === Main layout === */
+  .topbar {
+    padding: 22px 32px; display: flex; align-items: baseline; gap: 12px;
+    opacity: 0; transform: translateY(12px);
+    animation: rise .6s ease forwards;
+  }
+  .topbar h1 { font-size: 22px; color: #33305c; }
+  .topbar .slogan { color: #888; font-size: 13px; }
+  .layout {
+    display: grid; grid-template-columns: 320px 1fr; gap: 18px;
+    padding: 0 32px 32px;
+  }
+  .card {
+    background: rgba(255,255,255,.75); backdrop-filter: blur(10px);
+    border-radius: 14px; padding: 18px; margin-bottom: 16px;
+    box-shadow: 0 4px 16px rgba(120,110,200,.08);
+    opacity: 0; transform: translateY(14px);
+    animation: rise .6s ease forwards;
+  }
+  .card h3 { color: #4a4780; font-size: 15px; margin-bottom: 10px; }
+  .card p { color: #666; font-size: 13px; line-height: 1.8; }
+  /* 依次入场延迟 */
+  .topbar { animation-delay: 1.1s; }
+  .d1 { animation-delay: 1.25s; }
+  .d2 { animation-delay: 1.4s; }
+  .d3 { animation-delay: 1.55s; }
+  .d4 { animation-delay: 1.7s; }
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+  <div class="splash" id="splash">
+    <div style="text-align:center">
+      <div class="splash-logo-circle">
+        <svg viewBox="0 0 120 80" width="110" height="74">
+          <circle cx="30" cy="45" r="22" fill="rgba(255,255,255,.25)" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="60" cy="30" r="22" fill="rgba(255,255,255,.4)" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="90" cy="45" r="22" fill="rgba(255,255,255,.25)" stroke="#fff" stroke-width="2.5"/>
+        </svg>
+      </div>
+      <div class="splash-logo">Triple Y</div>
+      <div class="splash-sub">粘贴一段通知，剩下的我帮你记着</div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <h1>Triple Y · 通知转任务</h1>
+    <div class="slogan">粘贴一段通知，剩下的我帮你记着</div>
+  </div>
+  <div class="layout">
+    <div>
+      <div class="card d1"><h3>👤 个人中心</h3><p>hi, Triple! 今天也要稳稳推进</p></div>
+      <div class="card d2"><h3>📅 月历</h3><p>有任务的日期会带圆点，点一下跳到对应任务</p></div>
+    </div>
+    <div>
+      <div class="card d3"><h3>✍️ 输入通知</h3><p>粘贴一段通知原文，AI 自动拆成任务</p></div>
+      <div class="card d4"><h3>📋 任务清单</h3><p>进行中 / 最近完成 / 历史清单</p></div>
+    </div>
+  </div>
+
+<script>
+  setTimeout(() => document.getElementById('splash').classList.add('hide'), 2000);
+</script>
+</body>
+</html>

@@ -46,6 +46,7 @@ from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
 from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
+from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -364,6 +365,44 @@ async def analyze_image(image: UploadFile = File(...)):
     if not isinstance(matter, dict) or not matter:
         return _fail("图片解析失败：结果为空")
     return {"success": True, "data": matter, "error": None}
+
+
+# ==================== 10/22：查看依据（要求 → 原文）====================
+
+class EvidenceRequest(BaseModel):
+    matter: Optional[dict] = None
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+
+
+class EvidenceIndexRequest(BaseModel):
+    matter: Optional[dict] = None
+
+
+@app.post("/api/evidence", response_model=AnalyzeResponse)
+def evidence(req: EvidenceRequest):
+    """点一条要求（材料/步骤/待办/附件/截止/预警/要点），返回支持它的原文片段。"""
+    if not isinstance(req.matter, dict) or not req.matter:
+        return _fail("请提供已解析结果（matter）")
+    if not req.target_type or req.target_id is None:
+        return _fail("请提供 target_type 与 target_id")
+    if req.target_type not in TARGET_TYPES:
+        return _fail("target_type 不支持：%s（可选：%s）" % (req.target_type, " / ".join(TARGET_TYPES)))
+    return {"success": True, "data": find_evidence(req.matter, req.target_type, req.target_id), "error": None}
+
+
+@app.post("/api/evidence/index", response_model=AnalyzeResponse)
+def evidence_index(req: EvidenceIndexRequest):
+    """一次性返回所有条目的依据（前端可预取，用于给每条要求挂「查看依据」）。"""
+    if not isinstance(req.matter, dict) or not req.matter:
+        return _fail("请提供已解析结果（matter）")
+    items = build_evidence_index(req.matter)
+    return {
+        "success": True,
+        "data": {"items": items, "total": len(items),
+                 "suggestion_count": sum(1 for i in items if i["is_suggestion"])},
+        "error": None,
+    }
 
 
 # ==================== 统一错误兜底 ====================

@@ -49,4 +49,46 @@ export const analyzeNotification = (text) =>
 export const checkProfile = (payload) =>
   request('/api/check', { body: payload })
 
+// POST /api/prepare-list
+// body: { matter, checked_material_ids } 或 { text }
+// 返回 { matter_id, title, todo_list[], missing_items[], ready_items[], summary }
+export const prepareList = (payload) =>
+  request('/api/prepare-list', { body: payload })
+
+// POST /api/prepare-list/save
+// body: { matter_id, todo_list, checked_material_ids? } → { matter_id, todo_list, saved_at }
+export const savePrepareList = (payload) =>
+  request('/api/prepare-list/save', { body: payload })
+
+// GET /api/prepare-list/{matter_id} → 之前保存的记录
+export async function loadPrepareList(matterId) {
+  const res = await fetch(`${BASE_URL}/api/prepare-list/${encodeURIComponent(matterId)}`)
+  const payload = await res.json()
+  if (!payload.success) throw new Error(payload.error || '加载准备清单失败')
+  return payload.data
+}
+
+// POST /api/analyze-image  multipart/form-data 字段名 image → Matter
+export async function analyzeImage(file) {
+  const fd = new FormData()
+  fd.append('image', file)
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 90000)
+  try {
+    const res = await fetch(BASE_URL + '/api/analyze-image', { method: 'POST', body: fd, signal: ctrl.signal })
+    const payload = await res.json()
+    if (!payload.success) throw new Error(payload.error || '图片解析失败')
+    return payload.data
+  } finally { clearTimeout(timer) }
+}
+
+// POST /api/evidence  {matter, target_type, target_id} → {found, title, quote, is_suggestion, note}
+export async function getEvidence(payload) {
+  const res = await fetch(BASE_URL + '/api/evidence', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  return (await res.json()).data
+}
+
 export const apiBaseUrl = BASE_URL

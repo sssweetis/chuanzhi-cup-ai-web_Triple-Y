@@ -97,8 +97,8 @@ def main():
     _, r8 = call("/api/check", {"matter": "not-a-dict"})
     check("matter 类型不对 → 统一契约报错", r8.get("success") is False and bool(r8.get("error")), "error=%s" % r8.get("error"))
 
-    _, r9 = call("/api/check", {"text": "关于校园活动的通知内容。" * 300})
-    check("超长 text 被拦截", r9.get("success") is False and "3000" in (r9.get("error") or ""), "error=%s" % r9.get("error"))
+    _, r9 = call("/api/check", {"text": "关于校园活动的通知内容。" * 1500})
+    check("超长 text 被拦截", r9.get("success") is False and "通知过长" in (r9.get("error") or ""), "error=%s" % r9.get("error"))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

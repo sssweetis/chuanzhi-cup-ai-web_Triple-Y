@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triple Y · 深色模式预览</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:#1a1b2e; color:#e8e8f5; min-height:100vh; }
+  .topbar { display:flex; align-items:center; gap:10px; padding:20px 28px; }
+  .topbar h1 { font-size:20px; color:#fff; }
+  .topbar .slogan { color:#888; font-size:13px; }
+  .topbar .btn { margin-left:auto; background:#6b63d9; color:#fff; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .layout { display:grid; grid-template-columns:300px 1fr; gap:18px; padding:0 28px 28px; }
+  .card { background:#252745; border-radius:14px; padding:16px; border:1px solid rgba(255,255,255,.06); margin-bottom:14px; }
+  .profile-row { display:flex; gap:10px; align-items:center; }
+  .avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#8b86e8,#6b63d9); display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; }
+  .task { padding:10px 0; border-bottom:1px solid rgba(255,255,255,.06); font-size:13px; display:flex; justify-content:space-between; }
+  .task:last-child { border:none; }
+  .tag { padding:1px 8px; border-radius:4px; font-size:11px; }
+  .tag-red { background:rgba(220,80,80,.2); color:#ff8080; }
+  .tag-green { background:rgba(60,180,120,.2); color:#60d0a0; }
+  .tag-yellow { background:rgba(220,180,60,.2); color:#e8c060; }
+  .input-box { background:#1a1b2e; border-radius:8px; padding:12px; font-size:13px; color:#777; margin-top:8px; }
+  .btn-primary { background:linear-gradient(135deg,#8b86e8,#6b63d9); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; margin-top:10px; }
+  .cal-row { display:flex; justify-content:space-between; padding:6px 0; font-size:13px; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Triple Y</h1><span class="slogan">通知转任务 · 深色模式</span>
+    <button class="btn">❓ 使用说明</button>
+  </div>
+  <div class="layout">
+    <div>
+      <div class="card">
+        <div class="profile-row">
+          <div class="avatar">T</div>
+          <div><b>Triple</b><div style="font-size:12px;color:#888">hi! 今天也要稳稳推进</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <b>📅 月历</b>
+        <div style="margin-top:10px">
+          <div class="cal-row"><span><span class="dot" style="background:#ff6b6b"></span>10/22 奖学金报名</span></div>
+          <div class="cal-row"><span><span class="dot" style="background:#8b86e8"></span>10/25 提交成绩单</span></div>
+          <div class="cal-row"><span><span class="dot" style="background:#60d0a0"></span>10/30 缴费</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <b>✍️ 输入通知</b>
+        <div class="input-box">粘贴一段通知原文，或上传截图…</div>
+        <button class="btn-primary">AI 智能解析</button>
+      </div>
+      <div class="card">
+        <b>📋 任务清单</b>
+        <div class="task"><span>奖学金报名</span><span class="tag tag-red">紧急</span></div>
+        <div class="task"><span>提交成绩单</span><span class="tag tag-green">已完成</span></div>
+        <div class="task"><span>缴费 100 元</span><span class="tag tag-yellow">待办</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

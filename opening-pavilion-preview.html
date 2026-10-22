@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triple Y · 园林亭阁开屏</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; overflow:hidden; background:#1a1b2e; }
+
+  .scene {
+    position:fixed; inset:-10%; z-index:100;
+    background:
+      /* 阳光 */
+      radial-gradient(ellipse 60% 40% at 30% 20%, rgba(255,230,170,.5) 0%, transparent 60%),
+      /* 天空到地面 */
+      linear-gradient(180deg, #c9dcb8 0%, #e8e0c0 30%, #b8c49a 60%, #6a7a5a 100%);
+    animation: pushIn 6s ease forwards;
+  }
+  @keyframes pushIn {
+    0% { transform: scale(1.15) translateY(-5%); }
+    100% { transform: scale(1.3) translateY(10%); }
+  }
+
+  /* 穹顶（顶部圆形屋顶） */
+  .dome {
+    position:absolute; top:-5%; left:50%; transform:translateX(-50%);
+    width:80%; height:55%;
+    background: radial-gradient(circle at 50% 100%, #8a6a5a 0%, #6a4a3a 50%, #4a352a 100%);
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  }
+  .dome::after {
+    content:''; position:absolute; top:20%; left:50%; transform:translateX(-50%);
+    width:40%; height:60%;
+    border-radius:50%;
+    background: radial-gradient(circle, #d4a06a 0%, #a07040 60%, transparent 100%);
+    opacity:.6;
+  }
+  /* 柱子 */
+  .pillar { position:absolute; bottom:0; width:6%; height:60%; background:linear-gradient(90deg,#5a4a3a,#7a6a5a,#5a4a3a); }
+  .p1 { left:8%; } .p2 { right:8%; } .p3 { left:25%; height:50%; } .p4 { right:25%; height:50%; }
+
+  /* 拱门外面的树 */
+  .trees { position:absolute; bottom:0; left:0; right:0; height:45%; }
+  .tree { position:absolute; bottom:0; width:12%; }
+  .tree::before { content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:8px; height:60%; background:#5a4a3a; }
+  .tree::after { content:''; position:absolute; bottom:40%; left:50%; transform:translateX(-50%); width:120px; height:120px; border-radius:50%;
+    background: radial-gradient(circle, #8aaa6a 0%, #5a7a4a 100%); }
+  .t1 { left:15%; } .t2 { left:40%; transform:scale(1.3); } .t3 { right:15%; } .t4 { right:35%; transform:scale(.9); }
+
+  /* 光柱 */
+  .light-ray { position:absolute; top:0; left:25%; width:30%; height:100%;
+    background: linear-gradient(180deg, rgba(255,240,200,.35), transparent);
+    transform: rotate(15deg); filter: blur(20px); }
+
+  /* Triple Y */
+  .logo {
+    position:absolute; top:45%; left:50%; transform:translate(-50%,-50%);
+    color:#fff; font-size:72px; font-weight:900; letter-spacing:6px;
+    text-shadow: 0 4px 30px rgba(0,0,0,.3);
+    opacity:0;
+    animation: logoIn 1.2s ease 2.5s forwards, logoOut 1s ease 4.5s forwards;
+  }
+  .sub {
+    position:absolute; top:56%; left:50%; transform:translateX(-50%);
+    color:rgba(255,255,255,.85); font-size:18px; letter-spacing:3px;
+    opacity:0; animation: subIn 1s ease 3.2s forwards, subOut 1s ease 4.5s forwards;
+  }
+  @keyframes logoIn { to { opacity:1; } }
+  @keyframes logoOut { to { opacity:0; transform:translate(-50%,-50%) scale(1.3); } }
+  @keyframes subIn { to { opacity:1; } }
+  @keyframes subOut { to { opacity:0; } }
+
+  /* 场景淡出 */
+  .scene.fade { opacity:0; transition: opacity 1.2s ease; pointer-events:none; }
+
+  /* 主页面 */
+  .main {
+    position:fixed; inset:0; z-index:1;
+    background: linear-gradient(135deg, #e8e4ff 0%, #fff0e6 50%, #dceeff 100%);
+    filter: blur(15px); transform: scale(1.05);
+  }
+  .content { position:fixed; inset:0; z-index:2; padding:24px; opacity:0; animation: contentIn 1s ease 5s forwards; }
+  @keyframes contentIn { to { opacity:1; } }
+  .card { background:rgba(255,255,255,.85); border-radius:14px; padding:18px; box-shadow:0 4px 20px rgba(120,110,200,.1); margin-bottom:14px; }
+  h1 { color:#2d2a5e; margin-bottom:16px; }
+</style>
+</head>
+<body>
+  <div class="main"></div>
+  <div class="content">
+    <h1>Triple Y · 通知转任务</h1>
+    <div class="card"><b>✍️ 输入通知</b><div style="color:#999;font-size:13px;margin-top:8px">粘贴一段通知原文…</div></div>
+    <div class="card"><b>📋 任务清单</b><div style="color:#999;font-size:13px;margin-top:8px">这里是你的任务列表</div></div>
+  </div>
+
+  <div class="scene" id="scene">
+    <div class="light-ray"></div>
+    <div class="dome"></div>
+    <div class="pillar p1"></div><div class="pillar p2"></div>
+    <div class="pillar p3"></div><div class="pillar p4"></div>
+    <div class="trees">
+      <div class="tree t1"></div><div class="tree t2"></div><div class="tree t3"></div><div class="tree t4"></div>
+    </div>
+    <div class="logo">Triple Y</div>
+    <div class="sub">粘贴一段通知，剩下的我帮你记着</div>
+  </div>
+
+<script>
+  setTimeout(() => document.getElementById('scene').classList.add('fade'), 5800)
+</script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triple Y · 视觉风格预览</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; min-height:100vh; }
+
+  /* === 风格 A：浅色玻璃质感（当前风格升级版） === */
+  .theme-a { background: linear-gradient(135deg,#e8e4ff 0%,#fff0e6 50%,#dceeff 100%); padding:24px; min-height:100vh; }
+  .theme-a .topbar { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .theme-a h1 { font-size:20px; color:#2d2a5e; }
+  .theme-a .slogan { color:#888; font-size:13px; }
+  .theme-a .grid { display:grid; grid-template-columns:280px 1fr; gap:16px; }
+  .theme-a .card { background:rgba(255,255,255,.7); backdrop-filter:blur(14px); border-radius:14px; padding:16px; box-shadow:0 4px 20px rgba(120,110,200,.08); margin-bottom:14px; }
+  .theme-a .avatar { width:44px; height:44px; border-radius:50%; background:#8b86e8; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .theme-a .task { padding:10px; border-bottom:1px solid #eee; font-size:13px; }
+  .theme-a .tag { display:inline-block; padding:1px 8px; border-radius:4px; font-size:11px; margin-left:6px; }
+  .theme-a .tag-red { background:#fdecec; color:#c0392b; }
+  .theme-a .tag-green { background:#e6f7ec; color:#1a7f4a; }
+
+  /* === 风格 B：深色模式（科技感） === */
+  .theme-b { background:#1a1b2e; padding:24px; min-height:100vh; color:#e8e8f5; }
+  .theme-b .topbar { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .theme-b h1 { font-size:20px; color:#fff; }
+  .theme-b .slogan { color:#888; font-size:13px; }
+  .theme-b .grid { display:grid; grid-template-columns:280px 1fr; gap:16px; }
+  .theme-b .card { background:#252745; border-radius:14px; padding:16px; border:1px solid rgba(255,255,255,.06); margin-bottom:14px; }
+  .theme-b .avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#8b86e8,#6b63d9); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .theme-b .task { padding:10px; border-bottom:1px solid rgba(255,255,255,.06); font-size:13px; }
+  .theme-b .tag { display:inline-block; padding:1px 8px; border-radius:4px; font-size:11px; margin-left:6px; }
+  .theme-b .tag-red { background:rgba(220,80,80,.2); color:#ff8080; }
+  .theme-b .tag-green { background:rgba(60,180,120,.2); color:#60d0a0; }
+
+  /* === 风格 C：纯白极简（效率工具风） === */
+  .theme-c { background:#fafafa; padding:24px; min-height:100vh; color:#222; }
+  .theme-c .topbar { display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #eee; }
+  .theme-c h1 { font-size:20px; color:#111; }
+  .theme-c .slogan { color:#999; font-size:13px; }
+  .theme-c .grid { display:grid; grid-template-columns:280px 1fr; gap:16px; }
+  .theme-c .card { background:#fff; border-radius:10px; padding:16px; border:1px solid #eee; margin-bottom:14px; }
+  .theme-c .avatar { width:44px; height:44px; border-radius:50%; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .theme-c .task { padding:10px; border-bottom:1px solid #f0f0f0; font-size:13px; }
+  .theme-c .tag { display:inline-block; padding:1px 8px; border-radius:4px; font-size:11px; margin-left:6px; }
+  .theme-c .tag-red { background:#ffe5e5; color:#c0392b; }
+  .theme-c .tag-green { background:#e5f7ec; color:#1a7f4a; }
+
+  .divider { padding:20px; text-align:center; color:#999; font-size:13px; background:#333; }
+</style>
+</head>
+<body>
+
+<div class="theme-a">
+  <div class="topbar"><h1>Triple Y</h1><span class="slogan">风格 A · 浅色玻璃（升级版）</span></div>
+  <div class="grid">
+    <div>
+      <div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="avatar">T</div><div><b>Triple</b><div style="font-size:12px;color:#888">hi! 今天也要稳稳推进</div></div></div></div>
+      <div class="card"><b>📅 月历</b><div style="margin-top:8px;font-size:12px;color:#888">10/22 🔵 10/25 🔴 10/30 ⚪</div></div>
+    </div>
+    <div>
+      <div class="card"><b>✍️ 输入通知</b><div style="background:#fff;border-radius:8px;padding:12px;margin-top:8px;font-size:13px;color:#999">粘贴一段通知原文…</div></div>
+      <div class="card"><b>📋 任务清单</b>
+        <div class="task">奖学金报名 <span class="tag tag-red">紧急</span></div>
+        <div class="task">提交成绩单 <span class="tag tag-green">已完成</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">↓ 风格 B · 深色模式</div>
+
+<div class="theme-b">
+  <div class="topbar"><h1>Triple Y</h1><span class="slogan">风格 B · 深色科技感</span></div>
+  <div class="grid">
+    <div>
+      <div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="avatar">T</div><div><b>Triple</b><div style="font-size:12px;color:#888">hi! 今天也要稳稳推进</div></div></div></div>
+      <div class="card"><b>📅 月历</b><div style="margin-top:8px;font-size:12px;color:#888">10/22 🔵 10/25 🔴 10/30 ⚪</div></div>
+    </div>
+    <div>
+      <div class="card"><b>✍️ 输入通知</b><div style="background:#1a1b2e;border-radius:8px;padding:12px;margin-top:8px;font-size:13px;color:#777">粘贴一段通知原文…</div></div>
+      <div class="card"><b>📋 任务清单</b>
+        <div class="task">奖学金报名 <span class="tag tag-red">紧急</span></div>
+        <div class="task">提交成绩单 <span class="tag tag-green">已完成</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">↓ 风格 C · 纯白极简</div>
+
+<div class="theme-c">
+  <div class="topbar"><h1>Triple Y</h1><span class="slogan">风格 C · 纯白效率工具</span></div>
+  <div class="grid">
+    <div>
+      <div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="avatar">T</div><div><b>Triple</b><div style="font-size:12px;color:#888">hi! 今天也要稳稳推进</div></div></div></div>
+      <div class="card"><b>📅 月历</b><div style="margin-top:8px;font-size:12px;color:#888">10/22 🔵 10/25 🔴 10/30 ⚪</div></div>
+    </div>
+    <div>
+      <div class="card"><b>✍️ 输入通知</b><div style="background:#fafafa;border-radius:8px;padding:12px;margin-top:8px;font-size:13px;color:#999">粘贴一段通知原文…</div></div>
+      <div class="card"><b>📋 任务清单</b>
+        <div class="task">奖学金报名 <span class="tag tag-red">紧急</span></div>
+        <div class="task">提交成绩单 <span class="tag tag-green">已完成</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

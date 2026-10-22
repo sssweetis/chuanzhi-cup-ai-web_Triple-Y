@@ -1,5 +1,5 @@
 import { state, setState } from '../state.js'
-import { analyzeNotification, prepareList, analyzeImage } from '../api.js'
+import { analyzeNotification, prepareList, analyzeImage, analyzePdf } from '../api.js'
 import { renderMatter } from './ModeCard.js'
 import { SAMPLES } from '../mockMatters.js'
 
@@ -12,7 +12,9 @@ export function renderInputPanel(mount) {
         <div class="in-bar-left">
           <button class="tool" id="micBtn">语音</button>
           <button class="tool" id="imgBtn">📷 截图/图片</button>
-          <input type="file" id="imgInput" accept="image/*" hidden>
+          <input type="file" id="imgInput" accept="image/jpeg,image/png,image/webp" hidden>
+          <button class="tool" id="pdfBtn">📄 PDF</button>
+          <input type="file" id="pdfInput" accept=".pdf" hidden>
           <button class="tool" id="attachBtn">附件</button>
           <input type="file" id="fileInput" accept=".doc,.docx,.pdf" multiple hidden>
           <span class="date-pick">截止 <input type="date" id="taskDate"></span>
@@ -28,7 +30,7 @@ export function renderInputPanel(mount) {
         <button class="tool" id="imgRemove">✕ 移除图片</button>
       </div>
       <div class="chips" id="chipBox"></div>
-      <div class="attach-note">Word/PDF 附件解析开发中，当前仅记录文件名。</div>
+      <div class="attach-note">支持文字型 PDF（≤10MB、≤30页）；扫描版 PDF 请改用截图粘贴。</div>
       <div class="demo-row" id="demoRow" style="display:none">
         ${SAMPLES.map((s, i) => `<button class="tool demo-btn" data-i="${i}">${s.label}</button>`).join('')}
       </div>
@@ -36,6 +38,20 @@ export function renderInputPanel(mount) {
     </div>`
 
   const zone = mount.querySelector('#resultZone')
+
+  function toast(msg) {
+    let t = document.getElementById('toast')
+    if (!t) {
+      t = document.createElement('div')
+      t.id = 'toast'
+      t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:8px;z-index:9999;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:opacity .3s;'
+      document.body.appendChild(t)
+    }
+    t.textContent = msg
+    t.style.opacity = '1'
+    clearTimeout(t._timer)
+    t._timer = setTimeout(() => t.style.opacity = '0', 2500)
+  }
 
   // 点"出处"按钮 → 弹窗展示原文片段
   zone.addEventListener('click', (e) => {
@@ -87,7 +103,9 @@ export function renderInputPanel(mount) {
       zone.innerHTML = `<div class="error-box">解析失败：${state.analyzeError} <button class="btn btn-ghost btn-sm" id="retryBtn">重试</button></div>`
       mount.querySelector('#retryBtn').onclick = runAnalyze
     } else if (state.analyzeResult) {
-      zone.innerHTML = renderMatter(state.analyzeResult) + `
+      const imgNotice = state.resultFromImage
+        ? `<div style="background:#fff4e0;color:#b36b00;padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:10px">🤖 当前结果由图片识别生成，建议您核对原文，如有错漏请及时修改</div>` : ''
+      zone.innerHTML = imgNotice + renderMatter(state.analyzeResult) + `
         <div class="add-task-bar">
           <button class="btn btn-primary" id="addTaskBtn">＋ 把这个通知加入任务清单</button>
         </div>`
@@ -111,30 +129,42 @@ export function renderInputPanel(mount) {
   async function runAnalyze() {
     const text = mount.querySelector('#taskInput').value.trim()
     const imgFile = mount.querySelector('#imgInput').files[0]
-    if (!text && !imgFile) { alert('先粘贴一段通知，或上传一张截图'); return }
+    const pdfFile = mount.querySelector('#pdfInput').files[0]
+    if (!text && !imgFile && !pdfFile) { alert('先粘贴一段通知，或上传截图/PDF'); return }
     setState({ analyzing: true, analyzeError: '', analyzeResult: null })
     paint()
     try {
       let data
       if (imgFile) {
         data = await analyzeImage(imgFile)
+        state.resultFromImage = true
+      } else if (pdfFile) {
+        data = await analyzePdf(pdfFile)
+        state.resultFromImage = false
       } else {
         data = await analyzeNotification(text)
+        state.resultFromImage = false
       }
       setState({ analyzing: false, analyzeResult: data })
-      // 自动拉准备清单，把 todo_list 合并进任务清单
+      // 自动拉准备清单，按 generated/todo_id 覆盖式合并进任务清单
       try {
         const prep = await prepareList({ matter: data })
         const due = data && data.deadline && data.deadline.due_at
           ? data.deadline.due_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
-        const existing = new Set(state.tasks.map(t => t.title))
         const srcText = text
-        ;(prep.todo_list || []).forEach(todo => {
-          if (!existing.has(todo.action)) {
-            state.tasks.push({ id: Date.now() + Math.random(), title: todo.action, date: due, done: false, sourceText: srcText })
-            existing.add(todo.action)
-          }
-        })
+        const generated = (prep.todo_list || []).map((t, i) => ({
+          id: 9000 + i,
+          todo_id: t.todo_id,
+          title: t.action,
+          date: due,
+          done: t.status === 'completed',
+          doneAt: t.status === 'completed' ? new Date().toISOString().slice(0, 10) : '',
+          generated: true,
+          source_ref: t.source_ref || null,
+          sourceText
+        }))
+        const manual = state.tasks.filter(t => !t.generated)
+        state.tasks = [...manual, ...generated]
       } catch (e) { /* prepare-list 失败不阻塞主流程 */ }
     } catch (err) {
       const tip = /连不上后端|Failed to fetch|NetworkError/i.test(String(err))
@@ -147,10 +177,21 @@ export function renderInputPanel(mount) {
 
   mount.querySelector('#analyzeBtn').onclick = runAnalyze
   mount.querySelector('#imgBtn').onclick = () => mount.querySelector('#imgInput').click()
+  mount.querySelector('#pdfBtn').onclick = () => mount.querySelector('#pdfInput').click()
+  mount.querySelector('#pdfInput').onchange = (e) => {
+    const f = e.target.files[0]
+    if (!f) return
+    if (f.size > 10 * 1024 * 1024) { toast('PDF 不能超过 10MB'); e.target.value = ''; return }
+    toast('已选 PDF：' + f.name)
+  }
   mount.querySelector('#imgInput').onchange = (e) => {
     const f = e.target.files[0]
     if (!f) return
-    if (f.size > 10 * 1024 * 1024) { alert('图片不能超过 10MB'); e.target.value = ''; return }
+    if (f.size > 5 * 1024 * 1024 || !/jpeg|jpg|png|webp/i.test(f.type)) {
+      toast('图片过大或格式不支持（仅 JPG/PNG/WEBP，≤5MB）')
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       mount.querySelector('#imgPreviewRow').style.display = 'flex'

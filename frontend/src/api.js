@@ -82,6 +82,20 @@ export async function analyzeImage(file) {
   } finally { clearTimeout(timer) }
 }
 
+// POST /api/analyze-pdf  FormData 字段 file → Matter
+export async function analyzePdf(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 90000)
+  try {
+    const res = await fetch(BASE_URL + '/api/analyze-pdf', { method: 'POST', body: fd, signal: ctrl.signal })
+    const payload = await res.json()
+    if (!payload.success) throw new Error(payload.error || 'PDF 解析失败')
+    return payload.data
+  } finally { clearTimeout(timer) }
+}
+
 // POST /api/evidence  {matter, target_type, target_id} → {found, title, quote, is_suggestion, note}
 export async function getEvidence(payload) {
   const res = await fetch(BASE_URL + '/api/evidence', {

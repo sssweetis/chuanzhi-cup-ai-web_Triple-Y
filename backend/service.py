@@ -5,7 +5,7 @@ import uuid
 import re
 from typing import Dict, Any, List, Set
 from notification_extractor import LLMClient, MatterExtractor
-from prompt import SYSTEM_PROMPT, QA_PROMPT, UPDATE_PROMPT
+from prompt import SYSTEM_PROMPT, QA_PROMPT, UPDATE_PROMPT, IMAGE_CHECK_RULES
 
 logger = logging.getLogger(__name__)
 _extractor = None
@@ -259,6 +259,68 @@ def analyze_notification(notification_text: str) -> Dict[str, Any]:
     except Exception as e:
         logger.exception("AI 解析异常")
         return {"success": False, "data": None, "error": f"解析异常: {str(e)}"}
+
+def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
+    """新增：截图分析入口（多模态）。返回结构与 analyze_notification 一致，附 confirmation_needed。
+    image_data_uri: 形如 data:image/png;base64,.... 的图片 data URI
+    """
+
+    if not image_data_uri or not image_data_uri.strip():
+        return {"success": False, "data": None, "error": "图片不能为空"}
+
+    try:
+        extractor = _get_extractor()
+        llm = extractor.llm
+        sys_raw = SYSTEM_PROMPT  # 复用你的系统提示词
+        sys_total = sys_raw + IMAGE_CHECK_RULES  # 只新增，不改原有
+
+        from openai import OpenAI
+        client = OpenAI(api_key=llm.api_key, base_url=llm.base_url, timeout=llm.timeout)
+
+        response = client.chat.completions.create(
+            model=llm.model,
+            messages=[
+                {"role": "system", "content": sys_total},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url",
+                         "image_url": {"url": image_data_uri, "detail": "high"}},
+                    ],
+                },
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
+            stream=False,
+        )
+        content = response.choices[0].message.content
+        data = json.loads(content)
+
+        # ---------- 后端兜底：关键字段缺失时补一条 confirmation ----------
+        confirmations = data.get("confirmation_needed") or []
+        if not data.get("deadline") or not data.get("deadline", {}).get("due_at"):
+            confirmations.append("未识别到明确的截止时间，请确认")
+
+        # ---------- 复用原有补齐函数（新增，不删） ----------
+        if not data.get("warning_list"):
+            data["warning_list"] = []
+        if not data.get("deadline") or not data["deadline"].get("due_at"):
+            data["warning_list"].append({
+                "warning_id": f"warn_{uuid.uuid4().hex[:6]}",
+                "warning_type": "missing_information",
+                "severity": "high",
+                "message": "通知原文未提及明确的截止时间，请手动确认并设置",
+            })
+        _fix_todo_actions(data)
+        _fix_step_titles(data)
+        _rebuild_missing_items(data)
+
+        data["confirmation_needed"] = confirmations
+        return {"success": True, "data": data, "error": None, "source": "image"}
+
+    except Exception as e:
+        logger.exception("图片分析异常")
+        return {"success": False, "data": None, "error": f"图片解析失败: {str(e)}"}
 
 
 def _call_chat(llm, prompt_text: str, system_content: str, use_stream: bool = False) -> str:

@@ -19,6 +19,7 @@ import os
 from typing import Optional, Tuple
 
 from analysis_pipeline import analyze_with_fallback
+from service import analyze_notification_from_image
 
 logger = logging.getLogger("image_analyzer")
 
@@ -77,48 +78,48 @@ def _vision_config():
     return api_key, base_url, model
 
 
+def _call_a_image(data_uri: str):
+    """调用 A 的 analyze_notification_from_image（需要可用 Key）。
+
+    A 的函数用 LLM_API_KEY；如果团队 Key 只配在 TEAM_LLM_*，这里临时映射过去。
+    """
+    team_key, team_base, team_model = _vision_config()
+    if not team_key:
+        return None
+    os.environ["LLM_API_KEY"] = team_key
+    if team_base:
+        os.environ["LLM_BASE_URL"] = team_base
+    if team_model:
+        os.environ["LLM_MODEL"] = team_model
+    try:
+        return analyze_notification_from_image(data_uri)
+    except Exception as e:
+        logger.exception("A 的图片解析异常：%s", e)
+        return {"success": False, "error": "图片解析异常：%s" % e}
+
+
 def analyze_image_bytes(raw: bytes, filename: str, content_type: str) -> Tuple[Optional[dict], Optional[str]]:
     """返回 (matter_dict | None, error | None)。
 
     识别顺序：
-        1) 配置了团队视觉模型 Key → 调视觉模型（A 指定的方案）
-        2) 没有 Key / 视觉调用失败 → 本地 RapidOCR 兜底（不需要 Key）
-        3) 都失败 → 返回可展示的中文错误
+        1) 有 Key → A 的视觉大模型（analyze_notification_from_image，截图专用规则）
+        2) 无 Key / 视觉失败 → 本地 RapidOCR 兜底（不需要 Key）
+        3) 都失败 → 可展示的中文错误
     """
-    api_key, base_url, model = _vision_config()
-    extracted_text = None
+    api_key, _base, _model = _vision_config()
 
     if api_key:
-        try:
-            from openai import OpenAI
+        data_uri = "data:%s;base64,%s" % (content_type, base64.b64encode(raw).decode("utf-8"))
+        result = _call_a_image(data_uri) or {}
+        if result.get("success") and result.get("data"):
+            logger.info("视觉模型解析成功：%s", filename)
+            return result["data"], None
+        logger.warning("视觉模型不可用（%s），改用本地 OCR 兜底", result.get("error"))
 
-            b64 = base64.b64encode(raw).decode("utf-8")
-            client = OpenAI(api_key=api_key, base_url=base_url, timeout=VISION_TIMEOUT)
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": VISION_PROMPT},
-                        {"type": "image_url",
-                         "image_url": {"url": "data:%s;base64,%s" % (content_type, b64)}},
-                    ],
-                }],
-                temperature=0,
-            )
-            extracted_text = (response.choices[0].message.content or "").strip()
-            logger.info("视觉模型识别完成：%s chars=%d model=%s", filename, len(extracted_text), model)
-        except Exception as e:
-            logger.warning("视觉模型不可用（%s），改用本地 OCR 兜底", e)
-
-    if not extracted_text:
-        extracted_text, ocr_err = _local_ocr(raw)
-        if ocr_err:
-            return None, ocr_err
-        logger.info("本地 OCR 识别完成：%s chars=%d", filename, len(extracted_text))
-
-    if len(extracted_text) < 5:
-        return None, "图片解析失败：未识别到有效文字，请换一张更清晰的通知截图"
+    extracted_text, ocr_err = _local_ocr(raw)
+    if ocr_err:
+        return None, ocr_err
+    logger.info("本地 OCR 识别完成：%s chars=%d", filename, len(extracted_text))
 
     result = analyze_with_fallback(extracted_text)
     if not result.get("success"):

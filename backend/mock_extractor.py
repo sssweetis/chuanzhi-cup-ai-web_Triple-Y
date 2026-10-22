@@ -209,7 +209,7 @@ def _title(text):
             return t[:20]
     if "：" in s:
         head = s.split("：")[0].strip()
-        if 2 <= len(head) <= 14:
+        if 2 <= len(head) <= 14 and head not in ("通知", "公告", "提醒", "说明", "注意"):
             return head
     if "前" in s:
         tail = s.split("前", 1)[1].strip(" ，,：:")

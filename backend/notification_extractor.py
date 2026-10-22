@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# src/notification_extractor.py
 import json
 import os
 import uuid
@@ -223,11 +223,13 @@ class Material:
     status: str = "pending"
     template_attachment_id: Optional[str] = None
     source_ref: Optional[SourceRef] = None
+    is_suggestion: bool = False
 
     def to_dict(self) -> Dict:
         result = {"material_id": self.material_id, "material_name": self.material_name, "material_type": self.material_type, "status": self.status}
         if self.template_attachment_id: result["template_attachment_id"] = self.template_attachment_id
         if self.source_ref: result["source_ref"] = self.source_ref.to_dict()
+        if self.is_suggestion: result["is_suggestion"] = True
         return result
 
     @classmethod
@@ -244,6 +246,7 @@ class Material:
             status=_safe_str(d.get("status"), "pending"),
             template_attachment_id=d.get("template_attachment_id"),
             source_ref=SourceRef.from_dict(src) if src else None,
+            is_suggestion=bool(d.get("is_suggestion", False))
         )
 
 @dataclass
@@ -272,21 +275,23 @@ class Todo:
     action: str
     status: str = "pending"
     source_ref: Optional[SourceRef] = None
+    is_suggestion: bool = False
 
     def to_dict(self) -> Dict:
         result = {"todo_id": self.todo_id, "action": self.action, "status": self.status}
         if self.source_ref: result["source_ref"] = self.source_ref.to_dict()
+        if self.is_suggestion: result["is_suggestion"] = True
         return result
 
     @classmethod
     def from_dict(cls, d: Any) -> "Todo":
-        # 兼容处理：如果大模型直接输出了字符串，比如 ["获取附件1", "编写计划书"]
         if isinstance(d, str):
             return cls(
                 todo_id=f"todo_{uuid.uuid4().hex[:6]}",
                 action=d,
                 status="pending",
-                source_ref=None
+                source_ref=None,
+                is_suggestion=False
             )
 
         src = _safe_dict(d.get("source_ref"))
@@ -295,6 +300,7 @@ class Todo:
             action=_safe_str(d.get("action")),
             status=_safe_str(d.get("status"), "pending"),
             source_ref=SourceRef.from_dict(src) if src else None,
+            is_suggestion=bool(d.get("is_suggestion", False))
         )
 
 @dataclass
@@ -313,6 +319,7 @@ class Step:
     review: Optional[Review] = None
     sub_step_list: List["Step"] = field(default_factory=list)
     source_ref: Optional[SourceRef] = None
+    is_suggestion: bool = False
 
     def to_dict(self) -> Dict:
         id_key = "sub_step_id" if self.is_sub_step else "step_id"
@@ -326,17 +333,18 @@ class Step:
         if self.review: result["review"] = self.review.to_dict()
         if self.sub_step_list: result["sub_step_list"] = [s.to_dict() for s in self.sub_step_list]
         if self.source_ref: result["source_ref"] = self.source_ref.to_dict()
+        if self.is_suggestion: result["is_suggestion"] = True
         return result
 
     @classmethod
     def from_dict(cls, d: Any, is_sub_step: bool = False) -> "Step":
-        # 兼容处理：如果大模型在步骤里直接输出了字符串
         if isinstance(d, str):
             return cls(
                 step_id=f"step_{uuid.uuid4().hex[:6]}",
                 order=1,
                 title=d,
-                status="not_started"
+                status="not_started",
+                is_suggestion=False
             )
 
         src = _safe_dict(d.get("source_ref"))
@@ -367,6 +375,7 @@ class Step:
             review=Review.from_dict(rev) if rev else None,
             sub_step_list=[Step.from_dict(s, is_sub_step=True) for s in _safe_list(d.get("sub_step_list"))],
             source_ref=SourceRef.from_dict(src) if src else None,
+            is_suggestion=bool(d.get("is_suggestion", False))
         )
 
 @dataclass
@@ -636,9 +645,29 @@ class MatterExtractor:
             raw["deadline"] = {"scope": "overall", "label": "截止时间", "due_at": raw["deadline"]}
 
         features = _safe_list(raw.get("detected_features"))
+        
+        # ====== 增添：强行兜底，防止大模型漏识别特征导致降级 ======
+        if not features:
+            if raw.get("deadline"): features.append("has_deadline")
+            if raw.get("materials"): features.append("has_materials")
+            if _safe_list(raw.get("step_list")): features.append("has_multiple_steps")
+            if _safe_list(raw.get("warning_list")): features.append("has_review")
+            raw["detected_features"] = features
+        # ========================================================
+
         score = round(recompute_complexity(features), 3)
         raw["complexity_score"] = score
-        raw["mode"] = decide_mode(features, score)
+        
+        # ====== 增添：结合大模型给的mode和算法算出的mode，取较高者，防止被降级 ======
+        computed_mode = decide_mode(features, score)
+        llm_mode = raw.get("mode", "simple")
+        mode_priority = {"simple": 0, "standard": 1, "complex": 2}
+        if mode_priority.get(llm_mode, 0) > mode_priority.get(computed_mode, 0):
+            raw["mode"] = llm_mode
+        else:
+            raw["mode"] = computed_mode
+        # ==============================================================
+
         raw = enforce_mode(raw)
         raw = enforce_enabled_sections(raw)
 

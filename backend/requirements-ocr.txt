@@ -1,0 +1,3 @@
+# 可选：本地 OCR（无团队 Key 时的图片解析兜底）
+# 安装：pip install -r requirements-ocr.txt
+rapidocr-onnxruntime>=1.2.3

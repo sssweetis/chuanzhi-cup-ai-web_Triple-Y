@@ -41,12 +41,15 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from service import analyze_notification  # noqa: E402
+from service import analyze_notification, ask_question  # noqa: E402
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
 from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
 from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
+from pdf_analyzer import PDF_MAX_BYTES, PDF_MAX_PAGES, extract_pdf_text  # noqa: E402
+from file_store import (FILE_MAX_BYTES, ALLOWED_EXTS, save_file as save_uploaded_file,
+                        list_files, get_file, search_files)  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -405,6 +408,148 @@ def evidence_index(req: EvidenceIndexRequest):
     }
 
 
+# ==================== 10/25：PDF 文字提取 → Matter ====================
+
+@app.get("/api/analyze-pdf/limits")
+def analyze_pdf_limits():
+    return {
+        "success": True,
+        "data": {
+            "field": "file",
+            "content_type": "multipart/form-data",
+            "max_files": 1,
+            "max_bytes": PDF_MAX_BYTES,
+            "max_mb": round(PDF_MAX_BYTES / 1024 / 1024, 1),
+            "max_pages": PDF_MAX_PAGES,
+            "formats": ["PDF"],
+            "note": "仅支持文字型 PDF（可复制文字）；扫描件请改用截图",
+        },
+        "error": None,
+    }
+
+
+@app.post("/api/analyze-pdf", response_model=AnalyzeResponse)
+async def analyze_pdf(file: UploadFile = File(...)):
+    """上传文字型 PDF → 提取文字 → 走 /api/analyze 同一套抽取。"""
+    ctype = (file.content_type or "").lower().split(";")[0].strip()
+    name = (file.filename or "").lower()
+    if ctype != "application/pdf" and not name.endswith(".pdf"):
+        return _fail("仅支持 PDF 文件（收到：%s）" % (ctype or "未知"))
+
+    raw = await file.read(PDF_MAX_BYTES + 1)
+    if not raw:
+        return _fail("PDF 内容为空，请重新选择")
+    if len(raw) > PDF_MAX_BYTES:
+        return _fail("PDF 不能超过 10 MB（当前 %.1f MB）" % (len(raw) / 1024 / 1024))
+
+    try:
+        text, meta, err = extract_pdf_text(raw)
+    except Exception as e:
+        logger.exception("PDF 提取异常：%s", e)
+        return _fail(f"PDF 提取异常：{e}")
+    if err:
+        return _fail(err)
+
+    logger.info("PDF 解析：%s pages=%s chars=%s", file.filename, meta.get("pages"), meta.get("chars"))
+    result = _analyze_with_fallback(text)
+    if not result.get("success"):
+        return result
+    return {"success": True, "data": result.get("data"), "error": None}
+
+
+# ==================== 10/26–10/27：文件片段索引 / 检索 / 追问 ====================
+
+class FileSearchRequest(BaseModel):
+    query: Optional[str] = None
+    file_ids: Optional[List[str]] = None
+    top_k: Optional[int] = 5
+
+
+class AskRequest(BaseModel):
+    question: Optional[str] = None
+    file_ids: Optional[List[str]] = None
+    matter: Optional[dict] = None
+    top_k: Optional[int] = 5
+
+
+@app.get("/api/files/limits")
+def files_limits():
+    return {
+        "success": True,
+        "data": {"field": "file", "content_type": "multipart/form-data",
+                 "max_files": 1, "max_bytes": FILE_MAX_BYTES,
+                 "max_mb": round(FILE_MAX_BYTES / 1024 / 1024, 1),
+                 "formats": [e.lstrip(".").upper() for e in ALLOWED_EXTS]},
+        "error": None,
+    }
+
+
+@app.get("/api/files")
+def files_list():
+    """已上传材料列表（不含全文）。"""
+    return {"success": True, "data": {"items": list_files()}, "error": None}
+
+
+@app.post("/api/files/search", response_model=AnalyzeResponse)
+def files_search(req: FileSearchRequest):
+    """在已上传材料里检索相关片段（确定性打分，不调模型）。"""
+    if not (req.query or "").strip():
+        return _fail("检索内容不能为空")
+    hits = search_files(req.query, req.file_ids, req.top_k or 5)
+    return {"success": True, "data": {"query": req.query, "hits": hits, "total": len(hits)}, "error": None}
+
+
+@app.post("/api/files", response_model=AnalyzeResponse)
+async def files_upload(file: UploadFile = File(...)):
+    """上传材料（TXT / MD / 文字型 PDF），切片段并编号。"""
+    raw = await file.read(FILE_MAX_BYTES + 1)
+    try:
+        record = save_uploaded_file(file.filename or "upload", file.content_type or "", raw)
+    except ValueError as e:
+        return _fail(str(e))
+    except Exception as e:
+        logger.exception("文件保存失败：%s", e)
+        return _fail(f"文件保存失败：{e}")
+    return {"success": True, "data": record, "error": None}
+
+
+@app.get("/api/files/{file_id}", response_model=AnalyzeResponse)
+def files_get(file_id: str):
+    record = get_file(file_id)
+    if not record:
+        return _fail("没有找到该文件")
+    return {"success": True, "data": record, "error": None}
+
+
+@app.post("/api/ask", response_model=AnalyzeResponse)
+def ask(req: AskRequest):
+    """先查材料，再回答；材料外问题不乱答。有 Key 时用 A 的问答，否则返回检索到的原文。"""
+    question = (req.question or "").strip()
+    if not question:
+        return _fail("问题不能为空")
+    hits = search_files(question, req.file_ids, req.top_k or 5)
+    if not hits:
+        return {"success": True, "data": {
+            "answer": "在已上传的材料中没有找到与这个问题相关的原文，无法回答。",
+            "sources": [], "mode": "retrieval"}, "error": None}
+
+    sources = [{"file_id": h["file_id"], "filename": h["filename"], "chunk_id": h["chunk_id"],
+                "quote": h["text"][:300], "score": h["score"]} for h in hits]
+
+    if (os.getenv("LLM_API_KEY") or "").strip():
+        context = "\n\n".join("[%s] %s" % (h["chunk_id"], h["text"]) for h in hits)
+        try:
+            result = ask_question(req.matter or {}, context, question)
+            if result.get("success") and result.get("answer"):
+                return {"success": True, "data": {"answer": result["answer"], "sources": sources, "mode": "llm"}, "error": None}
+        except Exception as e:
+            logger.warning("LLM 问答失败，改用检索兜底：%s", e)
+
+    top = hits[0]
+    answer = "根据原文：「%s」\n（出处：%s / %s）" % (top["text"][:300], top["filename"], top["chunk_id"])
+    return {"success": True, "data": {"answer": answer, "sources": sources, "mode": "retrieval"}, "error": None}
+
+
 # ==================== 统一错误兜底 ====================
 
 @app.exception_handler(RequestValidationError)
@@ -412,7 +557,7 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     """请求体不是合法 JSON / 字段类型不对时，也返回统一契约，而不是 FastAPI 默认的 422。"""
     logger.warning("请求体校验失败：%s", exc.errors())
     return JSONResponse(status_code=200, content=_fail(
-        '请求体格式错误：请检查字段与类型（JSON: text / matter，multipart: image）'))
+        '请求体格式错误：请检查字段与类型（JSON: text / matter；multipart: image / file）'))
 
 
 @app.exception_handler(Exception)

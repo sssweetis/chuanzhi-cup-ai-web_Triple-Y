@@ -1,0 +1,14 @@
+# 一键起后端：docker compose up -d --build
+# 说明：backend/.env 需要提前准备好（含 Key / Mock 开关），不会打进镜像。
+services:
+  backend:
+    build: ./backend
+    container_name: tripley-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      # 准备清单 / 文件片段存档持久化（容器重建不丢）
+      - ./backend/data:/app/data
+    restart: unless-stopped

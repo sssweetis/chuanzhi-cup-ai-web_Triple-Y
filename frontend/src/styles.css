@@ -292,3 +292,6 @@ td.has-task:hover .cal-num { color: #6c66d9; text-decoration: underline; }
   .search-row { flex-wrap: wrap; }
   .task-main { flex-wrap: wrap; gap: 4px; }
 }
+
+.confirm-box { background:#fff8e6; border-radius:8px; padding:10px; margin:6px 0; }
+.confirm-item { font-size:13px; color:#b36b00; line-height:1.8; }

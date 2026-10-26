@@ -105,4 +105,40 @@ export async function getEvidence(payload) {
   return (await res.json()).data
 }
 
+// POST /api/files  FormData 字段 file → {file_id, filename}
+export async function uploadFile(file) {
+  const fd = new FormData(); fd.append('file', file)
+  const res = await fetch(BASE_URL + '/api/files', { method: 'POST', body: fd })
+  const p = await res.json()
+  if (!p.success) throw new Error(p.error || '上传失败')
+  return p.data
+}
+
+// GET /api/files → 已上传文件列表
+export async function listFiles() {
+  const res = await fetch(BASE_URL + '/api/files')
+  const p = await res.json()
+  return p.data || []
+}
+
+// POST /api/files/search  {query} → [{file_id, filename, chunk_id, text, score}]
+export async function searchFiles(query) {
+  const res = await fetch(BASE_URL + '/api/files/search', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query })
+  })
+  return (await res.json()).data || []
+}
+
+// POST /api/ask  {question, file_ids?} → {answer, sources}
+export async function askQuestion(payload) {
+  const res = await fetch(BASE_URL + '/api/ask', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  const p = await res.json()
+  if (!p.success) throw new Error(p.error || '提问失败')
+  return p.data
+}
+
 export const apiBaseUrl = BASE_URL

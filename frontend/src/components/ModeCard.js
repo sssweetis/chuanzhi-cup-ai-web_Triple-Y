@@ -143,6 +143,12 @@ function _render(m) {
     </div>`).join('')
   }
 
+  // ❓ 需要确认（图片识别后字迹不清等）
+  if (Array.isArray(m.confirmation_needed) && m.confirmation_needed.length) {
+    html += sec('❓', '需要你确认')
+    html += `<div class="confirm-box">${m.confirmation_needed.map(c => `<div class="confirm-item">· ${c}</div>`).join('')}</div>`
+  }
+
   // 👥 相关人
   if (hasSection(m, 'governance')) {
     const people = []

@@ -1,5 +1,5 @@
 import { state, setState } from '../state.js'
-import { analyzeNotification, prepareList, analyzeImage, analyzePdf } from '../api.js'
+import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion } from '../api.js'
 import { renderMatter } from './ModeCard.js'
 import { SAMPLES } from '../mockMatters.js'
 
@@ -35,6 +35,19 @@ export function renderInputPanel(mount) {
         ${SAMPLES.map((s, i) => `<button class="tool demo-btn" data-i="${i}">${s.label}</button>`).join('')}
       </div>
       <div class="result-zone" id="resultZone"></div>
+    </div>
+    <div class="card">
+      <div class="mc-sec"><span class="mc-sec-emoji">📚</span>材料库与追问</div>
+      <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+        <button class="tool" id="uploadFileBtn">📎 上传材料（TXT/MD/PDF）</button>
+        <input type="file" id="fileUploadInput" accept=".txt,.md,.pdf" hidden>
+        <span id="fileList" style="font-size:12px;color:#888"></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input type="text" id="askInput" placeholder="对材料提问，如：视频有什么要求？" style="flex:1;padding:8px;border:1px solid #d8d5ef;border-radius:8px">
+        <button class="btn btn-primary" id="askBtn">提问</button>
+      </div>
+      <div id="askResult" style="margin-top:10px"></div>
     </div>`
 
   const zone = mount.querySelector('#resultZone')
@@ -205,6 +218,35 @@ export function renderInputPanel(mount) {
     mount.querySelector('#imgPreview').src = ''
     mount.dataset.imgData = ''
     mount.querySelector('#imgInput').value = ''
+  }
+
+  // 材料库：上传 + 列表 + 追问
+  async function refreshFileList() {
+    const files = await listFiles().catch(() => [])
+    mount.querySelector('#fileList').textContent = files.length ? `已上传 ${files.length} 个文件` : ''
+  }
+  refreshFileList()
+  mount.querySelector('#uploadFileBtn').onclick = () => mount.querySelector('#fileUploadInput').click()
+  mount.querySelector('#fileUploadInput').onchange = async (e) => {
+    const f = e.target.files[0]
+    if (!f) return
+    if (f.size > 10 * 1024 * 1024) { toast('文件不能超过 10MB'); return }
+    try {
+      await uploadFile(f)
+      toast('上传成功')
+      refreshFileList()
+    } catch (err) { toast(err.message) }
+  }
+  mount.querySelector('#askBtn').onclick = async () => {
+    const q = mount.querySelector('#askInput').value.trim()
+    if (!q) return
+    const out = mount.querySelector('#askResult')
+    out.innerHTML = '<div style="color:#888;font-size:13px">思考中…</div>'
+    try {
+      const res = await askQuestion({ question: q })
+      out.innerHTML = `<div style="background:#f6f5ff;padding:10px;border-radius:8px;font-size:13px;line-height:1.7">${res.answer || '没有找到依据'}</div>` +
+        (res.sources && res.sources.length ? `<div style="margin-top:6px;font-size:12px;color:#888">出处：${res.sources.map(s => s.filename + ' · 片段' + (s.chunk_id || '')).join('、')}</div>` : '')
+    } catch (err) { out.innerHTML = `<div style="color:#c0392b;font-size:13px">${err.message}</div>` }
   }
   mount.querySelector('#demoToggle').onclick = () => {
     const row = mount.querySelector('#demoRow')

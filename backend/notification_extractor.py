@@ -1,11 +1,14 @@
 # src/notification_extractor.py
 import json
 import os
+import io
+import re
 import uuid
 import time
 import logging
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -108,6 +111,51 @@ class SourceRef:
             char_end=d.get("char_end"),
             chunk_id=d.get("chunk_id"),
             bbox=d.get("bbox"),
+        )
+
+@dataclass
+class DocumentChunk:
+    chunk_id: str
+    content: str
+    doc_name: str = "document"
+    doc_id: str = "doc_1"
+    page: Optional[int] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    score: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = {
+            "chunk_id": self.chunk_id,
+            "content": self.content,
+            "doc_name": self.doc_name,
+            "doc_id": self.doc_id,
+        }
+        if self.page is not None:
+            result["page"] = self.page
+        if self.char_start is not None:
+            result["char_start"] = self.char_start
+        if self.char_end is not None:
+            result["char_end"] = self.char_end
+        if self.score is not None:
+            result["score"] = self.score
+        if self.metadata:
+            result["metadata"] = self.metadata
+        return result
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "DocumentChunk":
+        return cls(
+            chunk_id=_safe_str(d.get("chunk_id")),
+            content=_safe_str(d.get("content")),
+            doc_name=_safe_str(d.get("doc_name"), "document"),
+            doc_id=_safe_str(d.get("doc_id"), "doc_1"),
+            page=d.get("page"),
+            char_start=d.get("char_start"),
+            char_end=d.get("char_end"),
+            score=d.get("score"),
+            metadata=d.get("metadata") or {},
         )
 
 @dataclass
@@ -644,6 +692,11 @@ class MatterExtractor:
         if isinstance(raw.get("deadline"), str):
             raw["deadline"] = {"scope": "overall", "label": "截止时间", "due_at": raw["deadline"]}
 
+        if isinstance(raw.get("title"), dict):
+            raw["title"] = raw["title"].get("text") or raw["title"].get("title") or "未命名事项"
+        elif not isinstance(raw.get("title"), str):
+            raw["title"] = str(raw.get("title") or "未命名事项")
+
         features = _safe_list(raw.get("detected_features"))
         
         # ====== 增添：强行兜底，防止大模型漏识别特征导致降级 ======
@@ -683,8 +736,255 @@ class MatterExtractor:
         if matter.id == "matter_auto": matter.id = f"matter_{uuid.uuid4().hex[:8]}"
         if not matter.title: matter.title = "未命名事项"
 
-        self.scheduler.schedule_from_matter(matter)
+        matter.scheduler_jobs = self.scheduler.schedule_from_matter(matter)
         return matter, None
+
+
+# ==================== 10.25：文字型 PDF 内容提取 ====================
+
+def extract_pdf_pages_and_text(pdf_input: Any, filename: str = "document.pdf") -> Dict[str, Any]:
+    """
+    10.25 任务：文字型 PDF 内容提取
+    接收 PDF 路径 (str/Path)、bytes 或文件流，提取出纯文本与逐页结构。
+    """
+    if pdf_input is None:
+        return {
+            "success": False, "text": "", "pages": [], "total_pages": 0,
+            "doc_name": filename, "is_scanned": False, "error": "PDF 输入内容为空"
+        }
+
+    try:
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            try:
+                import fitz
+            except ImportError:
+                fitz = None
+
+        if fitz is not None:
+            if isinstance(pdf_input, (str, Path)):
+                path_obj = Path(pdf_input)
+                if not path_obj.exists():
+                    return {
+                        "success": False, "text": "", "pages": [], "total_pages": 0,
+                        "doc_name": filename, "is_scanned": False, "error": f"PDF 文件不存在: {pdf_input}"
+                    }
+                doc = fitz.open(str(path_obj))
+                filename = path_obj.name
+            elif isinstance(pdf_input, bytes):
+                doc = fitz.open(stream=pdf_input, filetype="pdf")
+            elif hasattr(pdf_input, "read"):
+                data = pdf_input.read()
+                doc = fitz.open(stream=data, filetype="pdf")
+            else:
+                return {
+                    "success": False, "text": "", "pages": [], "total_pages": 0,
+                    "doc_name": filename, "is_scanned": False, "error": "不支持的 PDF 输入类型"
+                }
+
+            pages = []
+            page_text_blocks = []
+            total_chars = 0
+            for idx, page in enumerate(doc):
+                text = (page.get_text() or "").strip()
+                char_count = len(text)
+                total_chars += char_count
+                pages.append({
+                    "page": idx + 1,
+                    "text": text,
+                    "char_count": char_count
+                })
+                if text:
+                    page_text_blocks.append(f"【第 {idx + 1} 页】\n{text}")
+
+            total_pages = len(doc)
+            doc.close()
+            full_text = "\n\n".join(page_text_blocks)
+            is_scanned = bool(total_pages > 0 and total_chars < 15)
+
+            return {
+                "success": True,
+                "text": full_text,
+                "pages": pages,
+                "total_pages": total_pages,
+                "total_chars": total_chars,
+                "doc_name": filename,
+                "is_scanned": is_scanned,
+                "error": None
+            }
+        else:
+            try:
+                import pypdf
+                if isinstance(pdf_input, (str, Path)):
+                    reader = pypdf.PdfReader(str(pdf_input))
+                    filename = Path(pdf_input).name
+                elif isinstance(pdf_input, bytes):
+                    reader = pypdf.PdfReader(io.BytesIO(pdf_input))
+                else:
+                    reader = pypdf.PdfReader(pdf_input)
+
+                pages = []
+                page_text_blocks = []
+                total_chars = 0
+                for idx, page in enumerate(reader.pages):
+                    text = (page.extract_text() or "").strip()
+                    char_count = len(text)
+                    total_chars += char_count
+                    pages.append({"page": idx + 1, "text": text, "char_count": char_count})
+                    if text:
+                        page_text_blocks.append(f"【第 {idx + 1} 页】\n{text}")
+
+                total_pages = len(reader.pages)
+                full_text = "\n\n".join(page_text_blocks)
+                is_scanned = bool(total_pages > 0 and total_chars < 15)
+                return {
+                    "success": True,
+                    "text": full_text,
+                    "pages": pages,
+                    "total_pages": total_pages,
+                    "total_chars": total_chars,
+                    "doc_name": filename,
+                    "is_scanned": is_scanned,
+                    "error": None
+                }
+            except ImportError:
+                return {
+                    "success": False, "text": "", "pages": [], "total_pages": 0,
+                    "doc_name": filename, "is_scanned": False,
+                    "error": "未安装 PDF 解析库（pymupdf 或 pypdf），请先安装依赖"
+                }
+    except Exception as e:
+        logger.exception("PDF 文本提取异常: %s", e)
+        return {
+            "success": False,
+            "text": "",
+            "pages": [],
+            "total_pages": 0,
+            "doc_name": filename,
+            "is_scanned": False,
+            "error": f"PDF 文本提取失败: {str(e)}"
+        }
+
+
+# ==================== 10.26：片段划分与编号 (Chunking) ====================
+
+def chunk_document_text(
+    text: str,
+    doc_name: str = "通知原文",
+    doc_id: str = "doc_1",
+    page: Optional[int] = None,
+    chunk_size: int = 250,
+    overlap: int = 40,
+) -> List[DocumentChunk]:
+    """
+    10.26 任务：将通知内容切分成便于查找的片段并规范编号
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    split_pattern = r"(?<=[。\n！!？?；;])"
+    sentences = [s.strip() for s in re.split(split_pattern, text) if s.strip()]
+    if not sentences:
+        sentences = [text]
+
+    chunks: List[DocumentChunk] = []
+    cur_sentences = []
+    cur_len = 0
+    chunk_index = 1
+    char_offset = 0
+
+    for s in sentences:
+        s_len = len(s)
+        if cur_len + s_len > chunk_size and cur_sentences:
+            content = "".join(cur_sentences)
+            prefix = f"{doc_id}_p{page}" if page is not None else doc_id
+            cid = f"{prefix}_c{chunk_index}"
+            start_pos = text.find(content, max(0, char_offset - 200))
+            if start_pos == -1:
+                start_pos = char_offset
+            end_pos = start_pos + len(content)
+            char_offset = end_pos
+
+            chunks.append(DocumentChunk(
+                chunk_id=cid,
+                content=content,
+                doc_name=doc_name,
+                doc_id=doc_id,
+                page=page,
+                char_start=start_pos,
+                char_end=end_pos,
+            ))
+            chunk_index += 1
+
+            overlap_sentences = []
+            overlap_len = 0
+            for back_s in reversed(cur_sentences):
+                if overlap_len + len(back_s) <= overlap:
+                    overlap_sentences.insert(0, back_s)
+                    overlap_len += len(back_s)
+                else:
+                    break
+            cur_sentences = overlap_sentences
+            cur_len = overlap_len
+
+        cur_sentences.append(s)
+        cur_len += s_len
+
+    if cur_sentences:
+        content = "".join(cur_sentences)
+        prefix = f"{doc_id}_p{page}" if page is not None else doc_id
+        cid = f"{prefix}_c{chunk_index}"
+        start_pos = text.find(content, max(0, char_offset - 200))
+        if start_pos == -1:
+            start_pos = char_offset
+        end_pos = start_pos + len(content)
+
+        chunks.append(DocumentChunk(
+            chunk_id=cid,
+            content=content,
+            doc_name=doc_name,
+            doc_id=doc_id,
+            page=page,
+            char_start=start_pos,
+            char_end=end_pos,
+        ))
+
+    return chunks
+
+
+def chunk_document_pages(
+    pages: List[Dict[str, Any]],
+    doc_name: str = "document.pdf",
+    doc_id: str = "doc_1",
+    chunk_size: int = 250,
+    overlap: int = 40,
+) -> List[DocumentChunk]:
+    """
+    按页面进行片段切分，保留准确页码和编号
+    """
+    all_chunks: List[DocumentChunk] = []
+    chunk_index = 1
+    for page_item in pages:
+        p_num = page_item.get("page", 1)
+        p_text = page_item.get("text", "")
+        if not p_text.strip():
+            continue
+        p_chunks = chunk_document_text(
+            text=p_text,
+            doc_name=doc_name,
+            doc_id=doc_id,
+            page=p_num,
+            chunk_size=chunk_size,
+            overlap=overlap,
+        )
+        for c in p_chunks:
+            c.chunk_id = f"{doc_id}_p{p_num}_c{chunk_index}"
+            chunk_index += 1
+            all_chunks.append(c)
+    return all_chunks
+
 
 if __name__ == "__main__":
     from prompt import SYSTEM_PROMPT

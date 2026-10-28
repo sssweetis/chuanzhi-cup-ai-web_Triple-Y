@@ -42,6 +42,14 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from service import analyze_notification, ask_question  # noqa: E402
+try:
+    from service import analyze_notification_from_pdf  # noqa: E402
+except ImportError:      # A 的新版本还没同步时保持旧路径可用
+    analyze_notification_from_pdf = None
+try:
+    from service import ask_question_with_rag  # noqa: E402
+except ImportError:
+    ask_question_with_rag = None
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
@@ -49,7 +57,7 @@ from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_b
 from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
 from pdf_analyzer import PDF_MAX_BYTES, PDF_MAX_PAGES, extract_pdf_text  # noqa: E402
 from file_store import (FILE_MAX_BYTES, ALLOWED_EXTS, save_file as save_uploaded_file,
-                        list_files, get_file, search_files)  # noqa: E402
+                        list_files, get_file, search_files, collect_text)  # noqa: E402
 
 logger = logging.getLogger("main")
 
@@ -442,6 +450,16 @@ async def analyze_pdf(file: UploadFile = File(...)):
     if len(raw) > PDF_MAX_BYTES:
         return _fail("PDF 不能超过 10 MB（当前 %.1f MB）" % (len(raw) / 1024 / 1024))
 
+    # A 的新版：直接吃 PDF bytes（优先）；失败时回退到本地提取
+    if analyze_notification_from_pdf is not None:
+        try:
+            a_result = analyze_notification_from_pdf(raw)
+            if isinstance(a_result, dict) and a_result.get("success") and a_result.get("data"):
+                return {"success": True, "data": a_result.get("data"), "error": None}
+            logger.warning("A 的 PDF 解析失败（%s），改用本地提取", (a_result or {}).get("error"))
+        except Exception as e:
+            logger.warning("A 的 PDF 解析异常（%s），改用本地提取", e)
+
     try:
         text, meta, err = extract_pdf_text(raw)
     except Exception as e:
@@ -535,6 +553,25 @@ def ask(req: AskRequest):
 
     sources = [{"file_id": h["file_id"], "filename": h["filename"], "chunk_id": h["chunk_id"],
                 "quote": h["text"][:300], "score": h["score"]} for h in hits]
+
+    # A 的 RAG 防幻觉问答（优先）：docs 传材料原文，返回 found_evidence / evidence_chunks
+    docs = collect_text(req.file_ids)
+    if not docs.strip() and isinstance(req.matter, dict):
+        docs = "\n".join((x.get("quote") or "") for x in (req.matter.get("sources") or []) if isinstance(x, dict))
+    if ask_question_with_rag is not None and docs.strip():
+        try:
+            rag = ask_question_with_rag(question, docs, req.matter or {})
+            if isinstance(rag, dict) and rag.get("success"):
+                return {"success": True, "data": {
+                    "answer": rag.get("answer") or "",
+                    "mode": "llm",
+                    "found_evidence": rag.get("found_evidence"),
+                    "evidence_chunks": rag.get("evidence_chunks") or [],
+                    "sources": sources,
+                }, "error": None}
+            logger.warning("A 的 RAG 问答失败（%s），改用检索兜底", (rag or {}).get("error"))
+        except Exception as e:
+            logger.warning("A 的 RAG 问答异常（%s），改用检索兜底", e)
 
     if (os.getenv("LLM_API_KEY") or "").strip():
         context = "\n\n".join("[%s] %s" % (h["chunk_id"], h["text"]) for h in hits)

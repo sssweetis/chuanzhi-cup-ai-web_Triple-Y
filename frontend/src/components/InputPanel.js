@@ -21,7 +21,7 @@ export function renderInputPanel(mount) {
           <button class="tool" id="demoToggle" title="离线示例数据">示例</button>
         </div>
         <div class="in-bar-right">
-          <span class="char-count" id="charCount">0 / 3000</span>
+          <span class="char-count" id="charCount">0 / 10000</span>
           <button class="btn btn-primary" id="analyzeBtn">AI 智能解析</button>
         </div>
       </div>
@@ -51,6 +51,11 @@ export function renderInputPanel(mount) {
     </div>`
 
   const zone = mount.querySelector('#resultZone')
+
+  function esc(v) {
+    const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }
+    return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => map[c])
+  }
 
   function toast(msg) {
     let t = document.getElementById('toast')
@@ -93,7 +98,7 @@ export function renderInputPanel(mount) {
           getEvidence({ matter: state.analyzeResult, target_type: type, target_id: id })
             .then(res => {
               if (res && res.found) {
-                qEl.innerHTML = (res.is_suggestion ? '<div style="color:#b36b00">⚠ 系统建议（无原文依据）</div>' : '') + '“' + (res.quote || '') + '”'
+                qEl.innerHTML = (res.is_suggestion ? '<div style="color:#b36b00">⚠ 系统建议（无原文依据）</div>' : '') + '“' + esc(res.quote || '') + '”'
               } else { qEl.textContent = quote ? '“' + quote + '”' : '暂无原文' }
             })
             .catch(() => { qEl.textContent = quote ? '“' + quote + '”' : '暂无原文' })
@@ -159,6 +164,25 @@ export function renderInputPanel(mount) {
         state.resultFromImage = false
       }
       setState({ analyzing: false, analyzeResult: data })
+      // 图片识别有需要确认的内容 → 弹窗
+      if (Array.isArray(data.confirmation_needed) && data.confirmation_needed.length) {
+        let m = document.getElementById('confirmMask')
+        if (!m) {
+          m = document.createElement('div')
+          m.id = 'confirmMask'
+          m.className = 'mask'
+          m.innerHTML = `<div class="modal">
+            <h3>❓ 请确认以下内容</h3>
+            <div id="confirmList" style="margin:12px 0;font-size:14px;line-height:1.8"></div>
+            <div class="modal-foot"><button class="btn btn-primary" id="confirmOk">确认无误</button></div>
+          </div>`
+          document.body.appendChild(m)
+          m.onclick = (e) => { if (e.target === m) m.classList.remove('show') }
+          m.querySelector('#confirmOk').onclick = () => m.classList.remove('show')
+        }
+        m.querySelector('#confirmList').innerHTML = data.confirmation_needed.map(c => `<div>· ${c}</div>`).join('')
+        m.classList.add('show')
+      }
       // 自动拉准备清单，按 generated/todo_id 覆盖式合并进任务清单
       try {
         const prep = await prepareList({ matter: data })
@@ -177,7 +201,7 @@ export function renderInputPanel(mount) {
           sourceText
         }))
         const manual = state.tasks.filter(t => !t.generated)
-        state.tasks = [...manual, ...generated]
+        setState({ tasks: [...manual, ...generated] })
       } catch (e) { /* prepare-list 失败不阻塞主流程 */ }
     } catch (err) {
       const tip = /连不上后端|Failed to fetch|NetworkError/i.test(String(err))
@@ -244,9 +268,19 @@ export function renderInputPanel(mount) {
     out.innerHTML = '<div style="color:#888;font-size:13px">思考中…</div>'
     try {
       const res = await askQuestion({ question: q })
-      out.innerHTML = `<div style="background:#f6f5ff;padding:10px;border-radius:8px;font-size:13px;line-height:1.7">${res.answer || '没有找到依据'}</div>` +
-        (res.sources && res.sources.length ? `<div style="margin-top:6px;font-size:12px;color:#888">出处：${res.sources.map(s => s.filename + ' · 片段' + (s.chunk_id || '')).join('、')}</div>` : '')
-    } catch (err) { out.innerHTML = `<div style="color:#c0392b;font-size:13px">${err.message}</div>` }
+      const noEvidence = res.found_evidence === false
+      const banner = noEvidence
+        ? '<div style="background:#fff4e0;color:#b36b00;padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:6px">⚠ 材料中未找到相关依据，以上为通用回答，请自行核对原文</div>'
+        : ''
+      const chunks = res.evidence_chunks || res.sources || []
+      const chunkHtml = chunks.length
+        ? `<div style="margin-top:8px;font-size:12px;color:#888">📌 原文出处：</div>` +
+          chunks.map(c => `<div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:6px 10px;margin:4px 0;font-size:12px">${esc(c.doc_name || c.filename || '材料')} · 片段 ${esc(c.chunk_id || '-')} · 匹配度 ${c.score != null ? Math.round(c.score * 100) + '%' : ''}</div>`).join('')
+        : ''
+      out.innerHTML = banner +
+        `<div style="background:#f6f5ff;padding:10px;border-radius:8px;font-size:13px;line-height:1.7">${esc(res.answer || '')}</div>` +
+        chunkHtml
+    } catch (err) { out.innerHTML = `<div style="color:#c0392b;font-size:13px">${esc(err.message)}</div>` }
   }
   mount.querySelector('#demoToggle').onclick = () => {
     const row = mount.querySelector('#demoRow')
@@ -256,7 +290,7 @@ export function renderInputPanel(mount) {
   function syncInput() {
     const ta = mount.querySelector('#taskInput')
     localStorage.setItem('zhiban-input', ta.value)
-    mount.querySelector('#charCount').textContent = `${ta.value.length} / 3000`
+    mount.querySelector('#charCount').textContent = `${ta.value.length} / 10000`
     ta.style.height = 'auto'
     ta.style.height = Math.min(ta.scrollHeight, 300) + 'px'
     // 输入框清空时，下方分析结果也一起清掉

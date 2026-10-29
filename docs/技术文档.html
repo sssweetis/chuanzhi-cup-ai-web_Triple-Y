@@ -30,7 +30,7 @@
 <blockquote>
 <p>队伍：Triple Y ｜ 比赛：传智杯 AI WEB 网页开发挑战赛
 版本：v1.3 ｜ 日期：2026-10-29</p>
-<p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总。当前为省赛提交版；团队正式 Key 计划使用 DeepSeek，尚未配置，演示按 Mock + 本地 OCR 运行，真实模型记录待 Key 到位后补充。</p>
+<p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总。当前为省赛提交版；团队正式 Key 已配置，文本与视觉使用 DeepSeek Flash，首轮真实验收完成，token/费用待 DeepSeek 控制台账单补充。</p>
 </blockquote>
 <h2>目录</h2>
 <ol>
@@ -266,7 +266,7 @@ Nginx（前端静态文件 + /api 反向代理，超时 180s，上传 12MB）
   ▼
 FastAPI 容器（Uvicorn，CORS、限流、会话隔离）
   ├─ backend/data volume（清单、文件索引、对比记录）
-  ├─ 文本模型 DeepSeek；视觉模型可选（未配置走本地 OCR）
+  ├─ 文本模型 DeepSeek Flash；视觉模型 DeepSeek Flash；失败走本地 OCR
   └─ 本地 OCR（RapidOCR，无视觉 Key 时兜底）
 </code></pre>
 <p>本地开发用 <code>uvicorn</code> + <code>vite</code>；公网演示可用 Docker Compose 或 Render Blueprint，二者都保留同一套环境变量契约。</p>
@@ -435,14 +435,14 @@ FastAPI 容器（Uvicorn，CORS、限流、会话隔离）
 <p>团队正式 Key 统一使用 DeepSeek 的文本模型，通过环境变量配置：</p>
 <pre><code class="language-env"># 团队正式 Key 使用 DeepSeek
 LLM_API_KEY=&lt;your-deepseek-key&gt;
-LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-flash
 </code></pre>
 <p>选择 DeepSeek 的理由：</p>
 <ol>
 <li><strong>团队账号统一</strong>：一个团队 Key、一个文本模型，额度、账单和调用记录集中管理，避免多人用不同供应商/不同 Key 导致结果不可复现。</li>
 <li><strong>中文通知理解合适</strong>：DeepSeek 对中文公文、通知、材料清单这类长文本的指令跟随和语义理解比较稳定，适合“把通知拆成结构化字段”的任务。</li>
-<li><strong>结构化输出可用</strong>：使用 <code>response_format={"type": "json_object"}</code> + <code>temperature=0</code>，配合 JSON Schema 和代码字段裁剪，能稳定产出 Matter；默认选 <code>deepseek-chat</code> 做抽取，<code>deepseek-reasoner</code> 不作为默认，因为抽取任务对延迟和成本更敏感。</li>
+<li><strong>结构化输出可用</strong>：使用 <code>response_format={"type": "json_object"}</code> + <code>temperature=0</code>，配合 JSON Schema 和代码字段裁剪，能稳定产出 Matter；默认选 <code>deepseek-flash</code> 做抽取，<code>deepseek-v4-pro</code> 不作为默认，因为抽取任务对延迟和成本更敏感。</li>
 <li><strong>成本可控</strong>：按量计费，输入长度受 <code>MAX_TEXT_LENGTH</code> 控制，抽取任务不需要长链推理；相比每次上最大参数模型，更适合比赛演示和反复联调。</li>
 <li><strong>国内访问更稳定</strong>：比赛现场网络、代理和跨境延迟不可控，使用国内可访问的 DeepSeek 官方 API，减少现场演示的网络风险。</li>
 <li><strong>接入成本低</strong>：DeepSeek 提供标准 Chat Completions 接口，项目现有 SDK 可以直接调用；<code>LLM_BASE_URL</code> / <code>LLM_MODEL</code> 保持配置化是为了本地测试和后续迁移，<strong>团队正式环境固定使用 DeepSeek</strong>。</li>
@@ -452,18 +452,18 @@ LLM_MODEL=deepseek-chat
 <p>本项目的难点不是“模型知不知道什么是奖学金”，而是“能不能稳定输出指定结构、能不能不编造、能不能和代码规则配合”。微调需要标注数据、训练资源和持续维护，比赛周期内收益不稳定；本地 7B 级模型在中文长通知、JSON 稳定性、工具调用上还需要额外评测和调优。当前方案把“语义理解”交给 DeepSeek，把“结构、判定、降级”交给代码，整体更可控，也符合团队统一使用 DeepSeek 的部署方式。</p>
 <h3>4.1.3 视觉模型：单独配置，本地 OCR 兜底</h3>
 <p>截图解析使用独立的视觉模型配置：</p>
-<pre><code class="language-env"># 视觉模型单独配置；不强制与文本模型同一供应商
-# 若团队 DeepSeek Key 未开通多模态，下面三项可留空，截图走本地 OCR
-TEAM_LLM_API_KEY=&lt;your-vision-key&gt;
-TEAM_LLM_BASE_URL=&lt;vision-base-url&gt;
-TEAM_LLM_MODEL=&lt;vision-model&gt;
+<pre><code class="language-env"># 当前团队 Key 支持图片输入，视觉模型复用同一个 DeepSeek Key
+# 如果控制台实际模型名不同，只改 TEAM_LLM_MODEL
+TEAM_LLM_API_KEY=&lt;your-deepseek-key&gt;
+TEAM_LLM_BASE_URL=https://api.deepseek.com
+TEAM_LLM_MODEL=deepseek-flash
 </code></pre>
 <blockquote>
-<p>团队正式 Key 预计用于 DeepSeek 文本模型；视觉模型是否复用同一 Key，需要确认该 Key 是否支持图片输入。未确认前，截图默认走本地 RapidOCR，不影响文字主流程。</p>
+<p>当前团队 Key 支持图片输入，视觉模型复用同一个 DeepSeek Key；如果后续额度/模型调整，视觉模型可以单独替换。视觉调用失败时仍自动降级 RapidOCR，不影响文字主流程。</p>
 </blockquote>
 <p>单独配置的原因：</p>
 <ul>
-<li>视觉模型和文本模型的供应商、价格、额度可能不同，拆开后可以分别替换；</li>
+<li>视觉模型与文本模型解耦，便于单独换模型/额度；当前复用同一个 DeepSeek Key；</li>
 <li>截图请求更贵、更慢，只在用户上传图片时调用，不拖累文本主流程；</li>
 <li>视觉模型不可用时，自动降级到 <strong>RapidOCR（onnxruntime）</strong> 本地识别，再把文字送入统一抽取管道；</li>
 <li>对“字迹模糊、表格错位、数字被切断”等视觉歧义，模型输出 <code>confirmation_needed</code>，让用户确认，而不是猜。</li>
@@ -533,45 +533,45 @@ TEAM_LLM_MODEL=&lt;vision-model&gt;
 <li>真实模式默认按 IP + 路径限流（普通接口 60 次/分钟、上传 10 次/分钟），避免演示额度被刷爆。</li>
 </ul>
 <h3>4.1.6 当前验收状态（重要）</h3>
-<p>截至本版提交，<strong>团队正式 Key（计划 DeepSeek）尚未配置</strong>，仓库默认仍按 <strong>Mock + 本地 OCR</strong> 运行。开发阶段 A 曾用个人 Key（非团队 Key）做过本机接口联调，但该 Key 未提交到仓库，也没有形成团队验收数据；真实 DeepSeek 文本模型、视觉模型、Function Calling 的 token、耗时、费用记录尚未产生，不能把个人联调或 Mock 数据当成团队真实模型效果。</p>
+<p>截至本版提交，<strong>团队 DeepSeek Key 已配置</strong>，文本与视觉均使用 <code>deepseek-flash</code>，<code>/health</code> 返回 <code>mode=real</code>，<code>preflight.py</code> 13/13 通过。首轮真实验收已完成：</p>
 <table>
 <thead>
 <tr>
 <th>项目</th>
 <th>当前状态</th>
-<th>团队 DeepSeek Key 到位后要补</th>
+<th>还差什么</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>文本解析</td>
-<td>个人 Key（非团队 Key）联调过；仓库默认 Mock</td>
-<td>用 DeepSeek 重跑 3 个样本，记录耗时、token、费用</td>
+<td>3 个样本通过；单条约 22–35s；01/02 为 complex，03 修复后为 standard</td>
+<td>token/费用按 DeepSeek 控制台账单补</td>
 </tr>
 <tr>
 <td>截图识别</td>
-<td>本地 OCR 通过；视觉模型未配置</td>
-<td>确认 DeepSeek Key 是否支持图片输入；不支持则保持本地 OCR</td>
+<td>真实视觉模型通过；约 9.6s；标题/材料/日期可识别；deadline 已归一化为 ISO</td>
+<td>无</td>
 </tr>
 <tr>
 <td>RAG 追问</td>
-<td>本地检索通过；个人 Key 联调过</td>
-<td>用 DeepSeek 重跑回答质量、出处准确率与耗时</td>
+<td>材料内回答附出处；材料外明确拒答</td>
+<td>真实 token/费用待控制台</td>
 </tr>
 <tr>
 <td>日期工具调用</td>
-<td>本地工具 + 假客户端协议通过</td>
-<td>真实 DeepSeek Function Calling 一次完整记录</td>
+<td>真实 Function Calling 成功，<code>tool_trace</code> 有 <code>check_date</code></td>
+<td>无</td>
 </tr>
 <tr>
 <td>补充通知对比</td>
-<td>规则差异通过；个人 Key 联调过</td>
-<td>用 DeepSeek 对比语义差异、误判案例与费用</td>
+<td>A 侧规则+LLM 对比通过，改期/新增材料/受影响待办正确；C 侧 <code>/api/compare</code> 仍有材料名误报</td>
+<td>C 侧改用归一化对比（见第 8 节/验收记录）</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>结论：<strong>当前按“无团队 Key / Mock 演示”提交</strong>。团队 DeepSeek Key 到位后，按 <code>LLM_*</code>（文本）和 <code>TEAM_LLM_*</code>（视觉，可选）配置，重跑 <code>preflight.py</code> 并补充上表记录，再更新本节与 README。记录模板见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
+<p>结论：<strong>当前按真实 DeepSeek Flash 演示</strong>，不再标 Mock。token/费用以 DeepSeek 控制台账单为准；C 侧 compare 误报仍需修。完整记录见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
 </blockquote>
 <h2>4.2 Prompt 设计</h2>
 <h3>4.2.1 Prompt 的组织方式</h3>
@@ -881,32 +881,32 @@ score &gt; 0.6 → complex
 <tr>
 <td>字段抽取准确率</td>
 <td>标题/截止/材料/步骤与原文一致的比例</td>
-<td>Mock 结构通过；真实 DeepSeek 待 Key</td>
+<td>真实 3 样本结构通过；字段级准确率待人工逐项核对</td>
 </tr>
 <tr>
 <td>材料召回率</td>
 <td>原文要求材料被抽出的比例</td>
-<td>同上</td>
+<td>3 个样本均抽出 3 项材料；真实召回率待人工核对</td>
 </tr>
 <tr>
 <td>出处命中率</td>
 <td>回答引用的片段确实包含依据的比例</td>
-<td>本地检索可复现；真实模型待 Key</td>
+<td>真实 RAG 3.5s 附出处；出处命中率待批量统计</td>
 </tr>
 <tr>
 <td>拒答正确率</td>
 <td>材料外问题被正确拒绝的比例</td>
-<td>本地检索用例通过</td>
+<td>材料外“食堂”问题已拒答</td>
 </tr>
 <tr>
 <td>检索耗时</td>
 <td>Top-K 检索耗时</td>
-<td>Mock 100 次平均约 10–14ms</td>
+<td>Mock 100 次平均约 10–14ms；真实 RAG 3.5s（含生成）</td>
 </tr>
 <tr>
 <td>生成耗时/费用</td>
 <td>真实模型首 token/总耗时/token 费用</td>
-<td>⏳ 待团队 DeepSeek Key</td>
+<td>文本 22–35s、截图 9.6s、PDF 21.6s、工具 3.2s；token/费用待控制台</td>
 </tr>
 </tbody>
 </table>
@@ -1165,16 +1165,32 @@ score &gt; 0.6 → complex
 <td>全部通过（C 侧记录）</td>
 </tr>
 <tr>
-<td>A 侧 78 项确定性检查</td>
-<td>78/78</td>
+<td>A 侧 86 项确定性检查</td>
+<td>86/86</td>
 </tr>
 <tr>
 <td>Mock 性能（100 次）</td>
 <td>平均约 10–14ms，P95 约 17ms</td>
 </tr>
 <tr>
-<td>真实 DeepSeek 文本/视觉/工具调用</td>
-<td>⏳ 团队 Key 未配置，待补</td>
+<td>真实 DeepSeek Flash 文本</td>
+<td>3 个样本通过；单条约 22–35s</td>
+</tr>
+<tr>
+<td>真实视觉截图</td>
+<td>通过；约 9.6s；2 材料；日期已 ISO</td>
+</tr>
+<tr>
+<td>真实 PDF</td>
+<td>通过；约 21.6s</td>
+</tr>
+<tr>
+<td>真实 Function Calling</td>
+<td>通过；1 次 <code>check_date</code>，约 3.2s</td>
+</tr>
+<tr>
+<td>token / 费用</td>
+<td>待 DeepSeek 控制台账单补充</td>
 </tr>
 </tbody>
 </table>
@@ -1221,7 +1237,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>确定性单元测试</td>
 <td>规则、模式、日期、对比、检索、Prompt 契约</td>
-<td><code>src/test_compare_date.py</code>（78 项，无 Key）</td>
+<td><code>src/test_compare_date.py</code>（86 项，无 Key）</td>
 </tr>
 <tr>
 <td>接口集成测试</td>
@@ -1307,13 +1323,13 @@ score &gt; 0.6 → complex
 </tr>
 <tr>
 <td><code>src/test_compare_date.py</code></td>
-<td>78</td>
+<td>86</td>
 <td>补充通知、日期、模式裁剪、检索、Prompt 契约（A 侧）</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>当前结果来自 Mock + 本地 OCR；真实 DeepSeek 模型的 token/耗时/费用尚未产生，不能把 Mock 数据当成真实模型效果。</p>
+<p>当前结果包含真实 DeepSeek Flash 首轮验收；token/费用以控制台账单为准，C 侧 compare 误报仍待修。</p>
 </blockquote>
 <h3>6.3 真实模型评测计划</h3>
 <table>
@@ -1321,34 +1337,39 @@ score &gt; 0.6 → complex
 <tr>
 <th>维度</th>
 <th>记录项</th>
-<th>完成条件</th>
+<th>当前结果</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>文本解析</td>
 <td>3 个样本的字段准确率、耗时、prompt/completion tokens、费用</td>
-<td>团队 DeepSeek Key 配置后</td>
+<td>3 个样本通过；22–35s；token/费用待控制台</td>
 </tr>
 <tr>
 <td>视觉识别</td>
 <td>截图材料/日期/金额识别率、<code>confirmation_needed</code> 命中率</td>
-<td>确认 DeepSeek Key 是否支持图片输入</td>
+<td>通过；9.6s；2 材料；日期已 ISO</td>
 </tr>
 <tr>
 <td>RAG 追问</td>
 <td>出处命中率、拒答正确率、回答耗时</td>
-<td>上传演示材料后跑 5 个问题</td>
+<td>材料内 3.5s 附出处；材料外 0.03s 拒答</td>
 </tr>
 <tr>
 <td>工具调用</td>
 <td><code>check_date</code> 是否被模型调用、参数正确率、轨迹完整性</td>
-<td>真实 Function Calling 一次完整记录</td>
+<td>真实调用成功；1 次，3.2s</td>
+</tr>
+<tr>
+<td>补充通知</td>
+<td>改期/增删材料/受影响待办</td>
+<td>A 侧通过；C 侧材料名误报待修</td>
 </tr>
 <tr>
 <td>降级</td>
 <td>断 Key / 断网 / 坏图 / 扫描 PDF 的页面表现</td>
-<td>演示前演练</td>
+<td>演示前再演练</td>
 </tr>
 </tbody>
 </table>
@@ -1442,9 +1463,9 @@ score &gt; 0.6 → complex
 </table>
 <h2>8. 总结与展望</h2>
 <h3>8.1 已完成</h3>
-<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 78 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
+<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 86 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
 <h3>8.2 局限</h3>
-<p>团队正式 Key（计划 DeepSeek）尚未配置，当前文本走 Mock、截图走本地 OCR；开发阶段 A 使用个人 Key（非团队 Key）做过联调，但不作为团队验收数据；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
+<p>团队 DeepSeek Flash 已完成首轮真实验收，但 token/费用仍待控制台账单补充；C 侧 <code>/api/compare</code> 仍把原材料误报为删除，需要改用 A 侧归一化对比；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
 <h3>8.3 社会价值与商业潜力</h3>
 <p><strong>社会价值</strong>：</p>
 <ul>
@@ -1531,7 +1552,7 @@ powershell -ExecutionPolicy Bypass -File ..\scripts\build_tech_pdf.ps1
 </tr>
 <tr>
 <td>A 侧 <code>src/test_compare_date.py</code></td>
-<td>78/78（补充通知/日期/模式/检索/Prompt 契约）</td>
+<td>86/86（补充通知/日期/模式/检索/Prompt 契约）</td>
 </tr>
 <tr>
 <td><code>smoke_test_acceptance.py</code></td>
@@ -1551,7 +1572,7 @@ powershell -ExecutionPolicy Bypass -File ..\scripts\build_tech_pdf.ps1
 </tr>
 <tr>
 <td><code>docs/技术文档.pdf</code></td>
-<td>已重新导出 25 页最终版（≤30 页），含 4.1/4.2</td>
+<td>已重新导出 24 页最终版（≤30 页），含 4.1/4.2</td>
 </tr>
 </tbody>
 </table>

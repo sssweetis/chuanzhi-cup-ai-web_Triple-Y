@@ -64,7 +64,7 @@ export const savePrepareList = (payload) =>
 
 // GET /api/prepare-list/{matter_id} → 之前保存的记录
 export async function loadPrepareList(matterId) {
-  const res = await fetch(`${BASE_URL}/api/prepare-list/${encodeURIComponent(matterId)}`)
+  const res = await fetch(`${BASE_URL}/api/prepare-list/${encodeURIComponent(matterId)}`, { headers: { 'X-Session-Id': SESSION_ID } })
   const payload = await res.json()
   if (!payload.success) throw new Error(payload.error || '加载准备清单失败')
   return payload.data
@@ -77,7 +77,7 @@ export async function analyzeImage(file) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 90000)
   try {
-    const res = await fetch(BASE_URL + '/api/analyze-image', { method: 'POST', body: fd, signal: ctrl.signal })
+    const res = await fetch(BASE_URL + '/api/analyze-image', { method: 'POST', body: fd, headers: { 'X-Session-Id': SESSION_ID }, signal: ctrl.signal })
     const payload = await res.json()
     if (!payload.success) throw new Error(payload.error || '图片解析失败')
     return payload.data
@@ -91,7 +91,7 @@ export async function analyzePdf(file) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 90000)
   try {
-    const res = await fetch(BASE_URL + '/api/analyze-pdf', { method: 'POST', body: fd, signal: ctrl.signal })
+    const res = await fetch(BASE_URL + '/api/analyze-pdf', { method: 'POST', body: fd, headers: { 'X-Session-Id': SESSION_ID }, signal: ctrl.signal })
     const payload = await res.json()
     if (!payload.success) throw new Error(payload.error || 'PDF 解析失败')
     return payload.data
@@ -110,7 +110,7 @@ export async function getEvidence(payload) {
 // POST /api/files  FormData 字段 file → {file_id, filename}
 export async function uploadFile(file) {
   const fd = new FormData(); fd.append('file', file)
-  const res = await fetch(BASE_URL + '/api/files', { method: 'POST', body: fd })
+  const res = await fetch(BASE_URL + '/api/files', { method: 'POST', body: fd, headers: { 'X-Session-Id': SESSION_ID } })
   const p = await res.json()
   if (!p.success) throw new Error(p.error || '上传失败')
   return p.data
@@ -118,7 +118,7 @@ export async function uploadFile(file) {
 
 // GET /api/files → 已上传文件列表
 export async function listFiles() {
-  const res = await fetch(BASE_URL + '/api/files')
+  const res = await fetch(BASE_URL + '/api/files', { headers: { 'X-Session-Id': SESSION_ID } })
   const p = await res.json()
   return p.data || []
 }

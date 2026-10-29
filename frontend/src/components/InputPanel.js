@@ -313,7 +313,7 @@ export function renderInputPanel(mount) {
     if (!newN) return
     toast('对比中…')
     try {
-      const res = await compareNotifications({ old_notification: oldN, new_notification: newN })
+      const res = await compareNotifications({ left: { filename: '原通知', text: oldN }, right: { filename: '补充通知', text: newN } })
       const zone = mount.querySelector('#resultZone')
       const changes = (res.changes || []).map(c => `<div class="diff-change diff-${c.type || 'info'}">${c.text || ''}</div>`).join('')
       const affected = (res.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')

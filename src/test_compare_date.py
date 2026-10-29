@@ -424,6 +424,75 @@ def test_edge_cases():
     check("E05 同名材料重复也不崩溃", compared.get("success") is True,
           str(compared.get("error")))
 
+    # E14：补充通知只新增一项材料，不能把没重复列的原材料误报为删除
+    supplement = {
+        "title": "补充通知",
+        "deadline": {"due_at": "2026-11-08T18:00:00+08:00"},
+        "materials": [{"material_id": "mat_new", "material_name": "学院推荐表"}],
+        "step_list": [],
+        "todo_list": [],
+    }
+    compared = compare_notifications(
+        "原通知：提交报名表、成绩单、身份证复印件。",
+        "补充通知：新增学院推荐表。",
+        original_matter=original,
+        supplement_matter=supplement,
+        use_llm=False,
+    )
+    diff = compared["data"]["diff"]
+    check("E14 补充通知只新增材料时不误报删除", diff["removed_materials"] == [],
+          str([m["material_name"] for m in diff["removed_materials"]]))
+    check("E14 补充通知只新增材料时不要求删除确认",
+          not any("取消材料" in c for c in diff["confirmation_needed"]),
+          str(diff["confirmation_needed"]))
+    check("E14 新增材料仍被识别",
+          any(m["material_name"] == "学院推荐表" for m in diff["added_materials"]))
+
+    # E15：模型误报 has_review/has_dependencies 时，用原文关键词降级
+    text = "请各队于11月2日17:00前提交视频、说明文档和报名表，需指导老师签字。"
+    features = ne.sanitize_features(
+        ["has_deadline", "has_multiple_steps", "has_materials", "has_review", "has_dependencies"],
+        text,
+    )
+    check("E15 普通签字不被误判为审核", "has_review" not in features, str(features))
+    check("E15 并列步骤不被误判为依赖", "has_dependencies" not in features, str(features))
+    score = ne.recompute_complexity(features)
+    check("E15 误报特征清理后应为 standard", ne.decide_mode(features, score) == "standard",
+          str(ne.decide_mode(features, score)))
+    kept = ne.sanitize_features(
+        ["has_deadline", "has_materials", "has_review", "has_dependencies"],
+        "学院审核通过后，于11月20日参加答辩。",
+    )
+    check("E15 原文有审核/通过后时保留复杂特征",
+          "has_review" in kept and "has_dependencies" in kept, str(kept))
+
+    # E16：截图模型返回中文日期时归一化为 ISO
+    normalized = service._normalize_deadline_value("11月2日 17:00")
+    check("E16 中文日期归一化为 ISO",
+          str(normalized.get("due_at", "")).startswith("2026-11-02T17:00"),
+          str(normalized))
+
+    # E17：step_list[].order 重复时重排为 1..N
+    duplicated = {
+        "step_list": [
+            {"step_id": "step_1", "title": "A", "order": 1},
+            {"step_id": "step_2", "title": "B", "order": 1},
+            {"step_id": "step_3", "title": "C", "order": 1},
+        ]
+    }
+    reordered = ne.normalize_step_orders(duplicated)
+    check("E17 重复 order 重排为 1..N",
+          [s["order"] for s in reordered["step_list"]] == [1, 2, 3],
+          str([s["order"] for s in reordered["step_list"]]))
+
+    # E18：simple 模式二次裁剪后不允许 warning_list
+    guarded = service._apply_mode_guards({
+        "mode": "simple",
+        "title": "交表",
+        "warning_list": [{"warning_type": "missing_information"}],
+    })
+    check("E18 simple 模式不含 warning_list", "warning_list" not in guarded, str(guarded))
+
     # E06–E08：日期工具边界
     invalid = check_date("not-a-date")
     check("E06 非法日期返回失败", invalid.get("success") is False)

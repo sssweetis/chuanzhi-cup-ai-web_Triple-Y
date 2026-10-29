@@ -7,6 +7,7 @@ import urllib.request
 import uuid
 
 from rate_limit import SlidingWindowLimiter
+from compare_store import compare_matters
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000").rstrip("/")
 PASS, FAIL = "✅", "❌"
@@ -76,6 +77,14 @@ def main():
     _, _, bad_date = jcall("GET", "/api/tools/check-date?date=not-a-date")
     check("日期核对：错误格式被拦截", bad_date.get("success") is False and bool(bad_date.get("error")))
 
+    _, _, post_date = jcall("POST", "/api/tools/check-date", {
+        "deadline": "2026-11-08T18:00:00+08:00",
+    })
+    post_info = post_date.get("data") or {}
+    check("日期核对：兼容前端 POST deadline", post_date.get("success") is True
+          and bool(post_info.get("message")) and bool(post_info.get("recommended_date")),
+          "days_left=%s" % post_info.get("days_left"))
+
     session = "smoke-cmp-" + uuid.uuid4().hex[:6]
     left_text = "请于2026年11月2日17:00前提交报名表和成绩单。"
     right_text = "请于2026年11月3日18:00前提交报名表、成绩单和身份证复印件。"
@@ -100,6 +109,18 @@ def main():
     same_diff = ((same_cmp.get("data") or {}).get("diff") or {})
     check("双通知无差异", same_cmp.get("success") is True and same_diff.get("has_difference") is False,
           "changed=%s" % same_diff.get("has_difference"))
+
+    incremental = compare_matters(
+        {"materials": [{"material_name": "A form"}, {"material_name": "B score"}]},
+        {"materials": [{"material_name": "C recommendation"}]},
+        "original",
+        "supplement: add C recommendation",
+    )
+    check("补充通知增量合并不误报删除",
+          incremental["materials"]["only_left"] == []
+          and "B score" in incremental["materials"]["common"]
+          and incremental["materials"]["only_right"] == ["C recommendation"],
+          str(incremental["materials"]))
     same_id = (same_cmp.get("data") or {}).get("comparison_id")
     if same_id:
         jcall("DELETE", "/api/compare/%s" % same_id, headers={"X-Session-Id": session})

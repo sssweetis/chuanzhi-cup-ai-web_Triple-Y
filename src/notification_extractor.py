@@ -562,16 +562,50 @@ def enforce_enabled_sections(raw: Dict) -> Dict:
     raw["enabled_sections"] = MODE_ALLOWED_SECTIONS.get(raw.get("mode", "simple"), MODE_ALLOWED_SECTIONS["simple"])
     return raw
 
+
+def normalize_step_orders(data: Dict) -> Dict:
+    """把 step_list[].order 统一重排为 1..N，子步骤同理。
+
+    真实模型偶尔会返回 [1,1] / [1,1,1,1]，前端按 order 排序时会出现
+    顺序不稳定；这里不改变 step_id，只重排展示顺序。
+    """
+    if not isinstance(data, dict):
+        return data
+    for index, step in enumerate(data.get("step_list") or [], 1):
+        if not isinstance(step, dict):
+            continue
+        step["order"] = index
+        for sub_index, sub_step in enumerate(step.get("sub_step_list") or [], 1):
+            if isinstance(sub_step, dict):
+                sub_step["order"] = sub_index
+    return data
+
 FEATURE_WEIGHTS = {"has_deadline": 0.2, "has_multiple_reminders": 0.1, "has_multiple_steps": 0.2, "has_sub_steps": 0.1, "has_materials": 0.2, "has_review": 0.1, "has_dependencies": 0.1, "has_recurrence": 0.1}
 
 def recompute_complexity(features: List[str]) -> float:
-    return min(1.0, sum(FEATURE_WEIGHTS.get(f, 0.0) for f in features))
+    # 保留 3 位小数，避免 0.2+0.2+0.2 = 0.6000000000000001 被误判为 complex
+    return round(min(1.0, sum(FEATURE_WEIGHTS.get(f, 0.0) for f in features)), 3)
 
 def decide_mode(features: List[str], score: float) -> str:
     if any(f in features for f in ("has_sub_steps", "has_review", "has_dependencies")): return "complex"
     if score < 0.3: return "simple"
     if score <= 0.6: return "standard"
     return "complex"
+
+# 模型有时会把“指导老师签字”误判成审核、把并列步骤误判成依赖；
+# 这里用原文关键词做一次特征校验，避免整条通知被错误升级为 complex。
+REVIEW_KEYWORDS = ("审核", "评审", "初审", "复审", "审批", "复核", "盖章", "答辩", "公示")
+DEPENDENCY_KEYWORDS = ("通过后", "审核通过后", "完成后", "之后", "才能", "须先", "合格后", "立项后", "批准后", "公示后")
+
+def sanitize_features(features: List[str], text: str) -> List[str]:
+    """只保留原文有依据的复杂特征；没有关键词就降级为普通特征。"""
+    text = str(text or "")
+    result = list(features or [])
+    if "has_review" in result and not any(k in text for k in REVIEW_KEYWORDS):
+        result.remove("has_review")
+    if "has_dependencies" in result and not any(k in text for k in DEPENDENCY_KEYWORDS):
+        result.remove("has_dependencies")
+    return result
 
 MATTER_SCHEMA = {
     "type": "object", "required": ["schema_version", "id", "mode", "title", "status"],
@@ -704,18 +738,29 @@ class MatterExtractor:
             if raw.get("deadline"): features.append("has_deadline")
             if raw.get("materials"): features.append("has_materials")
             if _safe_list(raw.get("step_list")): features.append("has_multiple_steps")
-            if _safe_list(raw.get("warning_list")): features.append("has_review")
+            warnings = [w for w in _safe_list(raw.get("warning_list")) if isinstance(w, dict)]
+            if any(w.get("warning_type") in ("review", "approval", "dependency") for w in warnings):
+                features.append("has_review")
             raw["detected_features"] = features
         # ========================================================
+
+        # 用原文校验模型识别出的复杂特征，避免“指导老师签字”被误判成审核
+        features = sanitize_features(features, source)
+        raw["detected_features"] = features
 
         score = round(recompute_complexity(features), 3)
         raw["complexity_score"] = score
         
-        # ====== 增添：结合大模型给的mode和算法算出的mode，取较高者，防止被降级 ======
+        # ====== 结合大模型给的 mode 和公式算出的 mode，防止被降级 ======
+        # 但如果模型给 complex，而原文里没有任何复杂特征/分数也不够，就不能盲信；
+        # 否则“指导老师签字”这种普通通知会被升级成 complex，材料/步骤被错误保留。
         computed_mode = decide_mode(features, score)
         llm_mode = raw.get("mode", "simple")
         mode_priority = {"simple": 0, "standard": 1, "complex": 2}
-        if mode_priority.get(llm_mode, 0) > mode_priority.get(computed_mode, 0):
+        complex_supported = any(f in features for f in ("has_sub_steps", "has_review", "has_dependencies"))
+        if llm_mode == "complex" and not complex_supported and score <= 0.6:
+            raw["mode"] = computed_mode
+        elif mode_priority.get(llm_mode, 0) > mode_priority.get(computed_mode, 0):
             raw["mode"] = llm_mode
         else:
             raw["mode"] = computed_mode
@@ -723,6 +768,7 @@ class MatterExtractor:
 
         raw = enforce_mode(raw)
         raw = enforce_enabled_sections(raw)
+        raw = normalize_step_orders(raw)
 
         ok, err = validate_matter(raw)
         if not ok: 

@@ -15,6 +15,9 @@ from notification_extractor import (
     extract_pdf_pages_and_text,
     chunk_document_text,
     chunk_document_pages,
+    enforce_mode,
+    enforce_enabled_sections,
+    normalize_step_orders,
     TZ,
 )
 from prompt import (
@@ -38,6 +41,21 @@ def _get_extractor() -> MatterExtractor:
         _extractor = MatterExtractor(llm, SYSTEM_PROMPT)
         logger.info("MatterExtractor 初始化完成")
     return _extractor
+
+
+def _apply_mode_guards(data: dict) -> dict:
+    """在服务层补 warning/日期/来源后，再按 mode 做一次字段互斥裁剪。
+
+    MatterExtractor.process 内部已经裁剪过一次，但 service 后续会追加
+    warning_list、confirmation_needed 等字段；如果不再裁一次，simple 模式
+    会重新出现 warning_list 等禁止字段。
+    """
+    if not isinstance(data, dict):
+        return data
+    data = enforce_mode(data)
+    data = enforce_enabled_sections(data)
+    data = normalize_step_orders(data)
+    return data
 
 
 def _fix_todo_actions(data: dict):
@@ -274,6 +292,7 @@ def analyze_notification(notification_text: str) -> Dict[str, Any]:
         _fix_todo_actions(data)
         _fix_step_titles(data)
         _rebuild_missing_items(data)
+        data = _apply_mode_guards(data)
 
         return {"success": True, "data": data, "error": None}
     except Exception as e:
@@ -315,6 +334,7 @@ def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
         )
         content = response.choices[0].message.content
         data = json.loads(content)
+        data["deadline"] = _normalize_deadline_value(data.get("deadline"))
 
         # ---------- 后端兜底：关键字段缺失时补一条 confirmation ----------
         confirmations = data.get("confirmation_needed") or []
@@ -334,6 +354,7 @@ def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
         _fix_todo_actions(data)
         _fix_step_titles(data)
         _rebuild_missing_items(data)
+        data = _apply_mode_guards(data)
 
         data["confirmation_needed"] = confirmations
         return {"success": True, "data": data, "error": None, "source": "image"}
@@ -416,6 +437,7 @@ def analyze_notification_from_pdf(
         if not s.get("doc_version"):
             s["doc_version"] = doc_name
 
+    data = _apply_mode_guards(data)
     return {
         "success": True,
         "data": data,
@@ -506,6 +528,7 @@ def update_matter_status_with_ai(matter_data: dict, raw_text: str, user_action: 
 
         # 重建缺项清单
         _rebuild_missing_items(updated_data)
+        updated_data = _apply_mode_guards(updated_data)
 
         return {"success": True, "data": updated_data, "error": None}
 
@@ -829,6 +852,9 @@ _CANCEL_PATTERNS = (
     "不再提交", "不再提供", "免交", "无需提供",
 )
 
+# “推荐意见改为安全承诺书”这类明确替换，才允许把旧材料视为被替换。
+_REPLACEMENT_PATTERNS = ("改为", "替换为", "改成", "替代为", "换成")
+
 _WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
@@ -857,6 +883,44 @@ def _parse_datetime(value: Any, default_tz=timezone(timedelta(hours=8))) -> Opti
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=default_tz)
     return dt.astimezone(default_tz)
+
+
+def _coerce_deadline_datetime(value: Any) -> Optional[datetime]:
+    """把 ISO 或“11月2日 17:00”这类中文日期统一成带时区的 datetime。"""
+    dt = _parse_datetime(value)
+    if dt:
+        return dt
+    text = str(value or "").strip()
+    match = re.search(
+        r"(?:(\d{4})\s*年)?\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"
+        r"(?:\s*(\d{1,2})\s*[:：]\s*(\d{1,2}))?",
+        text,
+    )
+    if not match:
+        return None
+    year = int(match.group(1) or datetime.now(TZ).year)
+    month, day = int(match.group(2)), int(match.group(3))
+    hour = int(match.group(4) or 23)
+    minute = int(match.group(5) or 59)
+    try:
+        return datetime(year, month, day, hour, minute, tzinfo=TZ)
+    except ValueError:
+        return None
+
+
+def _normalize_deadline_value(value: Any) -> Any:
+    """图片模型常返回中文日期字符串；统一成 Matter 需要的 deadline 对象。"""
+    if isinstance(value, dict):
+        result = copy.deepcopy(value)
+        due = _coerce_deadline_datetime(result.get("due_at"))
+        if due:
+            result["due_at"] = due.isoformat()
+        return result
+    if isinstance(value, str) and value.strip():
+        due = _coerce_deadline_datetime(value)
+        if due:
+            return {"scope": "overall", "label": "截止时间", "due_at": due.isoformat()}
+    return value
 
 
 def _format_datetime(dt: Optional[datetime]) -> str:
@@ -913,6 +977,13 @@ def _has_any(text: str, patterns) -> bool:
     return any(p in (text or "") for p in patterns)
 
 
+def _mentioned_in(name: Any, text: str) -> bool:
+    """材料/步骤名是否在补充通知原文里被明确提到（归一化后匹配）。"""
+    normalized_name = _norm_name(name)
+    normalized_text = _norm_name(text)
+    return bool(normalized_name and normalized_name in normalized_text)
+
+
 def _requirements_from_matter(matter: Dict[str, Any]) -> List[str]:
     """把 Matter 压缩成前端好展示的“要求列表”。"""
     matter = matter or {}
@@ -944,6 +1015,12 @@ def _build_notice_diff(
 
     authoritative = _has_any(supplement_text, _AUTHORITATIVE_PATTERNS)
     cancel_explicit = _has_any(supplement_text, _CANCEL_PATTERNS)
+    replacement_explicit = _has_any(supplement_text, _REPLACEMENT_PATTERNS)
+    # “补充通知/补充说明”默认是增量，不是完整替代；只有明确写“原通知作废/替代”才算全量替换。
+    is_supplement = (
+        "补充" in (supplement_text or "")
+        or "补充" in str((supplement_matter or {}).get("title") or "")
+    ) and not any(p in (supplement_text or "") for p in ("原通知作废", "替代原通知", "取代原通知"))
 
     old_deadline = copy.deepcopy(original_matter.get("deadline") or {})
     new_deadline = copy.deepcopy(supplement_matter.get("deadline") or {})
@@ -1006,10 +1083,25 @@ def _build_notice_diff(
         )
 
     # 2) 材料
+    omitted_material_keys = [k for k in old_map if k not in new_map]
     if old_materials and not new_materials:
         # 补充通知可能只改时间，没有重复列材料；不能把“没重复”当成“全取消”。
         add_change("info", "material", "补充通知未重新列材料，保留原材料清单")
         removed_material_keys = []
+    elif is_supplement and not cancel_explicit and not replacement_explicit:
+        # 补充通知默认是增量：没重复提到的原材料继续适用，不能误报“删除”。
+        removed_material_keys = []
+        if omitted_material_keys:
+            names = "、".join(_material_name(old_map[k]) for k in omitted_material_keys[:5])
+            add_change("info", "material", f"补充通知未提及以下原材料，按继续适用处理：{names}")
+    elif cancel_explicit or replacement_explicit:
+        # 只有原文明确提到该材料，才把它视为取消/替换；避免“改一个材料”误删其他材料。
+        removed_material_keys = [
+            k for k in omitted_material_keys
+            if _mentioned_in(_material_name(old_map[k]), supplement_text)
+        ]
+    else:
+        removed_material_keys = omitted_material_keys
     for key in added_material_keys:
         material = new_map[key]
         add_change("added", "material", f"新增材料：{_material_name(material)}", new=_material_name(material))
@@ -1031,9 +1123,22 @@ def _build_notice_diff(
         )
 
     # 3) 步骤
+    omitted_step_keys = [k for k in old_step_map if k not in new_step_map]
     if old_steps and not new_steps:
         add_change("info", "step", "补充通知未重新列步骤，保留原步骤")
         removed_step_keys = []
+    elif is_supplement and not cancel_explicit and not replacement_explicit:
+        removed_step_keys = []
+        if omitted_step_keys:
+            titles = "、".join(str(old_step_map[k].get("title") or "") for k in omitted_step_keys[:5])
+            add_change("info", "step", f"补充通知未提及以下原步骤，按继续适用处理：{titles}")
+    elif cancel_explicit or replacement_explicit:
+        removed_step_keys = [
+            k for k in omitted_step_keys
+            if _mentioned_in(old_step_map[k].get("title"), supplement_text)
+        ]
+    else:
+        removed_step_keys = omitted_step_keys
     for key in added_step_keys:
         step = new_step_map[key]
         add_change("added", "step", f"新增步骤：{step.get('title')}", new=step.get("title"))
@@ -1577,6 +1682,7 @@ def _apply_date_result(
             "source_ref": {"quote": deadline_source.get("quote", "")},
         })
     matter["warning_list"] = warnings
+    matter = _apply_mode_guards(matter)
 
     return {
         "success": True,

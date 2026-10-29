@@ -24,7 +24,8 @@ import urllib.request
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000").rstrip("/")
 
 SAMPLES = [
-    ("样本1", "simple", "请于10月25日18:00前提交奖学金报名表。"),
+    # simple 样本必须没有材料/步骤，否则按公式会落到 standard
+    ("样本1", "simple", "请于10月25日18:00前完成报名。"),
     ("样本2", "standard",
      "奖学金报名：10月25日18:00前提交报名表（附件1）、成绩单、身份证复印件，交至行政楼302，需本人签字。"),
     ("样本3", "complex",
@@ -70,7 +71,7 @@ def check_matter(data, expected_mode):
     if mode != expected_mode:
         issues.append("mode 期望 %s，实际 %s" % (expected_mode, mode))
 
-    if expected_mode == "simple":
+    if mode == "simple":
         banned = [k for k in SIMPLE_BANNED if k in data]
         if banned:
             issues.append("simple 模式出现禁字段：%s" % ", ".join(banned))

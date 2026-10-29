@@ -1,26 +1,26 @@
 # A 侧测试用例与标准答案（10–15 个）
 
 > 整理：A（李丹阳）｜日期：2026-10-29
-> 环境：Windows / Python 3.10 / `mode=mock`（团队 DeepSeek Key 未配置）
-> 说明：标“✅ 自动化”的用例不依赖 Key；标“⏳ 待 Key”的用例结构/规则已验证，真实模型输出待团队 Key 到位后补记录。
+> 环境：Windows / Python 3.10 / `mode=real`（DeepSeek Flash，团队 Key 已配置）
+> 说明：A01–A04、A06、A08、A13 已跑真实模型；A05 模糊图、A15 无 Key 降级仍用规则/Mock 验证。
 
 ## 1. 用例总表
 
 | 编号 | 类别 | 输入 | 标准答案 / 期望 | 验证方式 |
 | --- | --- | --- | --- | --- |
-| A01 | 文字·简单通知 | `docs/demo-kit/03-材料视频通知.txt` | `mode=simple`；只保留标题、截止时间、提醒、出处；不出现 materials / step_list / todo_list | C 侧 `smoke_test_acceptance.py` 3/3（Mock）；⏳ 真实模型待 Key |
-| A02 | 文字·标准通知 | `docs/demo-kit/01-标准通知-奖学金.txt` | `mode=standard`；提取截止时间、3 项材料、办理步骤、待办；每条带 `source_ref` | C 侧 `smoke_test_acceptance.py` 3/3（Mock）；⏳ 真实模型待 Key |
-| A03 | 文字·复杂通知 | `docs/demo-kit/02-完整流程-社会实践.txt` | `mode=complex`；包含审核/依赖/子步骤/预警；`enabled_sections` 含 warnings / governance | C 侧 `smoke_test_acceptance.py` 3/3（Mock）；⏳ 真实模型待 Key |
-| A04 | 截图·清晰 | `docs/demo-kit/04-通知截图.png` | 识别出标题、截止日期、材料、人数/金额等；不产生无依据的 `confirmation_needed` | C 侧 `smoke_test_image.py` 6/6（本地 OCR）；⏳ 视觉模型待 Key |
-| A05 | 截图·模糊/歧义 | 模糊/遮挡截图 | 看不清的字段写入 `confirmation_needed`，不猜测；其余字段正常输出 | `IMAGE_CHECK_RULES` 规则静态检查；⏳ 真实视觉模型待 Key |
-| A06 | PDF·文字型 | `docs/demo-kit/05-文字型通知.pdf` | 成功提取文字并生成 Matter；返回页数、字符数 | C 侧 `smoke_test_pdf.py` 6/6（pypdf）；⏳ 真实模型待 Key |
+| A01 | 文字·标准通知 | `docs/demo-kit/03-材料视频通知.txt` | `mode=standard`；3 材料；`has_deadline/has_multiple_steps/has_materials`，不误判审核/依赖 | 真实 DeepSeek Flash：22.34s ✅（修复后） |
+| A02 | 文字·复杂通知（含审核） | `docs/demo-kit/01-标准通知-奖学金.txt` | `mode=complex`；3 材料；6 待办；审核/公示进入步骤 | 真实 DeepSeek Flash：26.35s ✅ |
+| A03 | 文字·复杂通知（含依赖） | `docs/demo-kit/02-完整流程-社会实践.txt` | `mode=complex`；3 材料；8 待办；审核/依赖/答辩 | 真实 DeepSeek Flash：26.13s ✅ |
+| A04 | 截图·清晰 | `docs/demo-kit/04-通知截图.png` | 识别出标题、截止日期、材料、人数/金额等；日期归一化为 ISO；不产生无依据的 `confirmation_needed` | 真实视觉模型：9.59s ✅；mode=standard，2 材料，deadline 2026-11-02T17:00 |
+| A05 | 截图·模糊/歧义 | 模糊/遮挡截图 | 看不清的字段写入 `confirmation_needed`，不猜测；其余字段正常输出 | `IMAGE_CHECK_RULES` 规则静态检查；⏳ 未测模糊图 |
+| A06 | PDF·文字型 | `docs/demo-kit/05-文字型通知.pdf` | 成功提取文字并生成 Matter；返回页数、字符数 | 真实 DeepSeek Flash：21.57s ✅ |
 | A07 | PDF·扫描版 | 无文字层 PDF | `success=false` 或明确提示“扫描件请改用清晰截图”，不返回空结果 | C 侧 `smoke_test_pdf.py` 6/6 |
-| A08 | RAG·材料内问题 | 上传 `01`/`03`，问“视频有什么要求？” | 回答引用材料原文，附文件名 + 片段编号（+ 页码）；不编造 | C 侧 `smoke_test_files.py` 10/10（检索兜底）；⏳ 真实模型待 Key |
+| A08 | RAG·材料内问题 | 上传 `01`/`03`，问“视频有什么要求？” | 回答引用材料原文，附文件名 + 片段编号（+ 页码）；不编造 | 真实 DeepSeek Flash：3.50s ✅，found=True |
 | A09 | RAG·材料外问题 | 问“食堂几点开门？” | 明确“在已上传的材料中没有找到……无法回答”，不给通用常识答案 | C 侧 `smoke_test_files.py` 10/10 |
 | A10 | 补充通知·明确以此为准 | `06` + `07` | 截止 11/10→11/08；新增“学院推荐表”；无需额外确认“哪份有效”；保存前仍需用户点确认 | ✅ A 侧 `test_compare_date.py` 样例 1 |
 | A11 | 补充通知·没写以此为准 | `08` + `09` | 生成 2 条确认：截止时间以哪份为准、是否取消“指导老师推荐意见”；未确认时 `applied=false`，不覆盖旧清单 | ✅ A 侧 `test_compare_date.py` 样例 2 |
 | A12 | 变更确认·版本历史 | 保存 v1 → 修改 → 保存 v2 | `version=2`；`previous_todo_list` 保留 v1；`history` 保留最近 5 版；导出 CSV/Markdown 含最新版本 | C 侧 `smoke_test_hardening.py` 16/16 |
-| A13 | 日期工具·周末 | 截止 `2026-11-08 18:00`，当前 `2026-10-31 10:00` | 剩余 8 天；周日；`is_weekend=true`；建议 `2026-11-06 18:00`（周五）前提交；`tool_trace` 包含 `check_date` 调用 | ✅ A 侧 `test_compare_date.py` 日期用例 |
+| A13 | 日期工具·周末 | 截止 `2026-11-08 18:00`，当前 `2026-10-31 10:00` | 剩余 8 天；周日；`is_weekend=true`；建议 `2026-11-06 18:00`（周五）前提交；`tool_trace` 包含 `check_date` 调用 | ✅ 单元 + 真实 Function Calling 3.17s（1 次调用） |
 | A14 | 日期工具·过期/无截止 | 截止 `2026-10-30 18:00`；或无 `deadline` | 过期：`is_expired=true`、`risk_level=high`、建议联系对方确认补交；无截止：不调用工具（`mode=skipped`），提示手动补充 | ✅ A 侧 `test_compare_date.py` 边界用例 |
 | A15 | 无 Key / 接口失败降级 | 不配置 `LLM_API_KEY`，上传文字/截图 | 文本走离线 Mock，截图走本地 OCR；`/health` 返回 `mode=mock`；页面不白屏，错误有可读提示 | C 侧 `smoke_test.py` / `preflight.py`；✅ 本地 Mock |
 
@@ -81,7 +81,7 @@ suggestions 中包含“通知里没有明确截止时间，请手动补充后�
 ## 3. 复现命令
 
 ```powershell
-# A 侧：补充通知 + 日期工具 + 模式裁剪 + 检索 + Prompt 契约（78 项，不需要 Key）
+# A 侧：补充通知 + 日期工具 + 模式裁剪 + 检索 + Prompt 契约（88 项，不需要 Key）
 python src/test_compare_date.py
 
 # C 侧：后端接口（需要先启动后端）
@@ -94,9 +94,9 @@ python preflight.py
 
 | 用例 | 缺少条件 |
 | --- | --- |
-| 真实 DeepSeek 文本抽取准确率 | 团队 DeepSeek Key |
-| 真实视觉模型识别率 | 团队 Key 是否支持图片输入 |
-| 真实 Function Calling 的 token/耗时/费用 | 团队 DeepSeek Key |
+| 真实 token / 费用 | 按 DeepSeek 控制台账单导出 |
+| 模糊截图 `confirmation_needed` | 需要一张真实模糊/遮挡截图 |
+| C 侧 `/api/compare` 材料归一化 | C 改用 A 的对比或做名称归一化 |
 | 手机 / 另一台电脑布局 | B 或实际设备 |
 | 线上三案例复现 | C 部署公网地址 |
 | 演示视频成片 | 全队录屏与剪辑 |

@@ -20,7 +20,9 @@ REQUIRED = [
     "backend/.env.example", "backend/smoke_test_hardening.py", "frontend/package.json",
     "scripts/build_tech_pdf.ps1",
     "docs/技术文档.md", "docs/技术文档.html", "docs/技术文档.pdf", "docs/演示视频脚本.md",
-    "docs/部署说明.md", "docs/第三阶段测试用例.md",
+    "docs/部署说明.md", "docs/第三阶段测试用例.md", "docs/真实模型验收记录.md",
+    "scripts/online_acceptance.ps1", "scripts/deploy-vps.sh",
+    "docker-compose.prod.yml", "frontend/Dockerfile", "frontend/nginx.conf",
 ]
 LARGE_MB = 5
 
@@ -120,7 +122,7 @@ def main():
     print("  · README「团队分工」是否写了真实姓名/GitHub 账号")
     print("  · docs/技术文档.md 的 4.1/4.2 已由 A 补完（检查最终 PDF 是否包含）")
     print("  · 演示视频是否已录（5–8 分钟、MP4、≥1080p）")
-    print("  · 技术文档 PDF 是否已按最终版重新导出（当前 25 页，≤30 页）")
+    print("  · 技术文档 PDF 是否已按最终版重新导出（当前 24 页，≤30 页）")
 
     print("\n" + "=" * 66)
     if problems:

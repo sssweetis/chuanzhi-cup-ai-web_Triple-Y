@@ -1,0 +1,27 @@
+﻿# 国内云服务器一键部署：前端静态页 + FastAPI 后端 + Nginx 同源代理
+# 启动：docker compose -f docker-compose.prod.yml up -d --build
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: tripley-backend
+    env_file:
+      - ./backend/.env
+    expose:
+      - "8000"
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /
+    container_name: tripley-web
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

@@ -6,9 +6,9 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status](https://img.shields.io/badge/Status-P1%20Complete-green.svg)
-![Demo](https://img.shields.io/badge/Demo-Mock%20%2B%20Local%20OCR-orange.svg)
+![Demo](https://img.shields.io/badge/Demo-DeepSeek%20Flash%20Real-green.svg)
 
-> **当前提交版本说明**：团队正式 Key 计划使用 DeepSeek，尚未配置；仓库默认 `LLM_ENABLE_MOCK=1`，文本解析走离线 Mock、截图走本地 OCR。真实模型接入代码已就绪，Key 到位后按 [`docs/真实模型验收记录.md`](docs/真实模型验收记录.md) 补 token / 耗时 / 费用记录。演示数据全部为虚构数据。
+> **当前提交版本说明**：团队 DeepSeek Key 已配置，文本与视觉使用 `deepseek-flash`，`/health` 为 `real`，`preflight.py` 13/13 通过。首轮真实文本/截图/PDF/RAG/Function Calling 已完成；DeepSeek 控制台累计 70 次请求 / 214,613 tokens / ¥0.61，记录见 [`docs/真实模型验收记录.md`](docs/真实模型验收记录.md)。演示数据全部为虚构数据。
 
 ---
 
@@ -154,7 +154,7 @@ score = 0.2*has_deadline
 | 层 | 技术 |
 |---|---|
 | 语言 | Python 3.10+ |
-| LLM 调用 | OpenAI 兼容接口（支持任意自定义供应商：通义千问、DeepSeek、Moonshot、智谱、字节豆包、硅基流动、Ollama、vLLM 等） |
+| LLM 调用 | DeepSeek 官方 API（`deepseek-flash`；兼容 Chat Completions 调用格式） |
 | 结构化校验 | jsonschema |
 | 数据建模 | Python dataclass |
 | 时间处理 | datetime（Asia/Shanghai） |
@@ -216,7 +216,7 @@ chuanzhi-cup-ai-web_Triple-Y/
 │   ├── 第三阶段测试用例.md
 │   ├── AI侧测试用例与答案.md       ← A 侧 15 个 AI 用例与标准答案
 │   ├── AI侧答辩速查.md             ← 10 个常见答辩问题
-│   ├── 真实模型验收记录.md         ← 团队 DeepSeek Key 到位后补记录
+│   ├── 真实模型验收记录.md         ← DeepSeek Flash 首轮真实记录
 │   └── demo-kit/                   ← 匿名演示通知、截图、PDF、标准答案
 │
 ├── scripts/                        ← 构建与提交前检查
@@ -272,7 +272,7 @@ npm run dev
 
 打开终端提示的地址（默认 <http://localhost:5173>）。
 
-### 7.4 Mock 模式（默认，无需 API Key）
+### 7.4 Mock 模式（无 Key 时，无需 API Key）
 
 `backend/.env` 默认 `LLM_ENABLE_MOCK=1`：
 
@@ -288,14 +288,14 @@ npm run dev
 ```env
 LLM_ENABLE_MOCK=0
 LLM_API_KEY=<your-deepseek-key>
-# 团队正式 Key 计划使用 DeepSeek
-LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_MODEL=deepseek-chat
+# 团队正式 Key 使用 DeepSeek
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-flash
 
-# 截图视觉模型（可选；若 DeepSeek Key 不含图片输入，留空走本地 OCR）
+# 截图视觉模型（当前 Key 支持图片输入；若换 Key 不支持，留空走本地 OCR）
 TEAM_LLM_API_KEY=<your-vision-key>
-TEAM_LLM_BASE_URL=<vision-base-url>
-TEAM_LLM_MODEL=<vision-model>
+TEAM_LLM_BASE_URL=https://api.deepseek.com
+TEAM_LLM_MODEL=deepseek-flash
 ```
 
 重启后端，`/health` 返回 `mode=real`。Key 只放后端，禁止提交到仓库或写进前端。
@@ -396,7 +396,7 @@ TEAM_LLM_MODEL=<vision-model>
 
 > **功能冻结说明**：自 11/07 起不再新增功能，只修复阻断主流程的问题；以下为已知局限，答辩时主动说明。
 
-1. **真实模型效果尚未在本仓库验收**：团队正式 Key（计划 DeepSeek）尚未配置，所有自动化测试和演示数据都是 Mock + 本地 OCR；开发阶段 A 曾用个人 OpenAI Key 做本机联调，但不作为团队验收数据。真实 DeepSeek 文本模型、视觉模型、Function Calling 的准确率、耗时、token、费用还没有实测记录，不能把个人联调或 Mock 结果当成团队真实模型效果。
+1. **真实模型已首轮验收，但仍有未落库数据**：团队 DeepSeek Flash 已完成文本 3 例、截图、PDF、RAG、Function Calling 的真实调用（`preflight.py` 13/13）；控制台累计 70 次请求 / 214,613 tokens / ¥0.61（单场景未分摊）。C 侧 `/api/compare` 已改为补充通知增量合并，06+07 复测通过（18/18）。
 2. **扫描版 PDF 和复杂版式能力有限**：只支持可复制文字的 PDF；扫描件需要改用截图通道；复杂表格、手写体、印章遮挡的识别精度取决于视觉模型或本地 OCR。
 3. **RAG 是词法检索，不是向量检索**：当前用中文二元组重叠、连续字串匹配和词频加权，能覆盖大部分“原文里明确写了”的问题，但对同义改写、跨段落归纳、长材料召回不如 embedding + rerank；检索不到时会拒答，可能漏掉本可回答的问题。
 4. **补充通知对比仍可能漏判**：采用“规则差异 + 可选 LLM 语义补充”，对同义改写、跨段落改期、连续多份补充通知的链路还不够稳；改期和删材料默认要求用户确认，避免误覆盖，但也增加了操作步骤。
@@ -439,10 +439,12 @@ TEAM_LLM_MODEL=<vision-model>
 - [ ] **第 4 阶段（11/01 - 11/10）**：稳定与提交材料
   - [x] 技术文档 4.1 模型选型 / 4.2 Prompt 设计
   - [x] README 功能状态、路线图、局限性更新
-  - [x] 重新导出技术文档 PDF（25 页，含 4.1/4.2）
+  - [x] 重新导出技术文档 PDF（24 页，含 4.1/4.2）
   - [x] AI 侧 15 个测试用例与标准答案
   - [x] 6 分 30 秒视频讲稿与三个演示案例
-  - [ ] 真实 Key 验收 + token / 耗时 / 费用记录
+  - [x] 真实 Key 验收（DeepSeek Flash，preflight 13/13）
+  - [x] token / 费用台账（累计 70 次 / 214,613 tokens / ¥0.61）
+  - [ ] C 侧 compare 误报修复
   - [ ] 演示视频录制与剪辑
   - [ ] 在线演示部署（可选加分）
   - [x] 最终测试表、复现步骤与已知问题清单

@@ -3,7 +3,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-OUT = r"C:\Users\34683\Desktop\Triple_Y\docs\demo-kit"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 TEXT = "通知：请于11月2日17:00前提交报名表和成绩单，交至行政楼305。"
 
 def font_path(size):

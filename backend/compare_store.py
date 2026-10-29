@@ -110,6 +110,35 @@ def compare_matters(left: dict, right: dict, left_text: str = "", right_text: st
     left_mat_keys, right_mat_keys = set(left_materials), set(right_materials)
     left_step_keys, right_step_keys = set(left_steps), set(right_steps)
     deadline_changed = left_deadline.get("due_at") != right_deadline.get("due_at")
+    only_left = [left_materials[k] for k in sorted(left_mat_keys - right_mat_keys)]
+    only_right = [right_materials[k] for k in sorted(right_mat_keys - left_mat_keys)]
+    only_left_steps = [left_steps[k] for k in sorted(left_step_keys - right_step_keys)]
+    only_right_steps = [right_steps[k] for k in sorted(right_step_keys - left_step_keys)]
+
+    changes, affected_todos = [], []
+    if deadline_changed:
+        changes.append({"type": "changed", "text": "截止时间：%s → %s" % (
+            left_deadline.get("due_at") or "未设置", right_deadline.get("due_at") or "未设置")})
+        affected_todos.append("重新确认截止时间相关待办")
+    for name in only_right:
+        changes.append({"type": "added", "text": "新增材料：%s" % name})
+        affected_todos.append("准备新增材料：%s" % name)
+    for name in only_left:
+        changes.append({"type": "removed", "text": "可能删除材料：%s" % name})
+        affected_todos.append("确认是否取消材料：%s" % name)
+    for title in only_right_steps:
+        changes.append({"type": "added", "text": "新增步骤：%s" % title})
+    for title in only_left_steps:
+        changes.append({"type": "removed", "text": "可能删除步骤：%s" % title})
+
+    old_requirements = list(left_materials.values()) + list(left_steps.values())
+    new_requirements = list(right_materials.values()) + list(right_steps.values())
+    has_difference = bool(deadline_changed or only_left or only_right or only_left_steps or only_right_steps)
+    confirmation_needed = []
+    if only_left:
+        confirmation_needed.append("确认原通知中的材料是否仍然需要")
+    if deadline_changed:
+        confirmation_needed.append("确认新的截止时间")
 
     return {
         "deadline": {
@@ -119,19 +148,25 @@ def compare_matters(left: dict, right: dict, left_text: str = "", right_text: st
         },
         "materials": {
             "common": [left_materials[k] for k in sorted(left_mat_keys & right_mat_keys)],
-            "only_left": [left_materials[k] for k in sorted(left_mat_keys - right_mat_keys)],
-            "only_right": [right_materials[k] for k in sorted(right_mat_keys - left_mat_keys)],
-            "changed": bool(left_mat_keys ^ right_mat_keys),
+            "only_left": only_left,
+            "only_right": only_right,
+            "changed": bool(only_left or only_right),
         },
         "steps": {
             "common": [left_steps[k] for k in sorted(left_step_keys & right_step_keys)],
-            "only_left": [left_steps[k] for k in sorted(left_step_keys - right_step_keys)],
-            "only_right": [right_steps[k] for k in sorted(right_step_keys - left_step_keys)],
-            "changed": bool(left_step_keys ^ right_step_keys),
+            "only_left": only_left_steps,
+            "only_right": only_right_steps,
+            "changed": bool(only_left_steps or only_right_steps),
         },
-        "has_difference": deadline_changed or bool(left_mat_keys ^ right_mat_keys) or bool(left_step_keys ^ right_step_keys),
+        "has_difference": has_difference,
+        "engine": "c_fallback",
+        "changes": changes,
+        "affected_todos": list(dict.fromkeys(affected_todos)),
+        "requires_confirmation": bool(confirmation_needed),
+        "confirmation_needed": confirmation_needed,
+        "old_requirements": old_requirements,
+        "new_requirements": new_requirements,
     }
-
 
 def save_comparison(left: dict, right: dict, diff: dict, session_id: str = "default") -> dict:
     comparison_id = "cmp_" + uuid.uuid4().hex[:8]

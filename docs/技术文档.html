@@ -565,13 +565,13 @@ TEAM_LLM_MODEL=deepseek-flash
 </tr>
 <tr>
 <td>补充通知对比</td>
-<td>A 侧规则+LLM 对比通过，改期/新增材料/受影响待办正确；C 侧 <code>/api/compare</code> 仍有材料名误报</td>
-<td>C 侧改用归一化对比（见第 8 节/验收记录）</td>
+<td>A 侧规则+LLM 对比通过，改期/新增材料/受影响待办正确；C 侧 <code>/api/compare</code> 已改用增量合并，06+07 复测通过</td>
+<td>已完成（smoke_test_hardening.py 18/18）</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>结论：<strong>当前按真实 DeepSeek Flash 演示</strong>，不再标 Mock。平台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 compare 误报仍需修。完整记录见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
+<p>结论：<strong>当前按真实 DeepSeek Flash 演示</strong>，不再标 Mock。平台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 compare 增量误报已修复。完整记录见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
 </blockquote>
 <h2>4.2 Prompt 设计</h2>
 <h3>4.2.1 Prompt 的组织方式</h3>
@@ -1313,7 +1313,7 @@ score &gt; 0.6 → complex
 </tr>
 <tr>
 <td><code>smoke_test_hardening.py</code></td>
-<td>16</td>
+<td>18</td>
 <td>双通知、版本历史、导出、日期、会话隔离、删除</td>
 </tr>
 <tr>
@@ -1329,7 +1329,7 @@ score &gt; 0.6 → complex
 </tbody>
 </table>
 <blockquote>
-<p>当前结果包含真实 DeepSeek Flash 首轮验收；控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 compare 误报仍待修。</p>
+<p>当前结果包含真实 DeepSeek Flash 首轮验收；控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 compare 增量误报已修复。</p>
 </blockquote>
 <h3>6.3 真实模型评测计划</h3>
 <table>
@@ -1364,7 +1364,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>补充通知</td>
 <td>改期/增删材料/受影响待办</td>
-<td>A 侧通过；C 侧材料名误报待修</td>
+<td>A 侧通过；C 侧增量合并 18/18 通过</td>
 </tr>
 <tr>
 <td>降级</td>
@@ -1465,7 +1465,7 @@ score &gt; 0.6 → complex
 <h3>8.1 已完成</h3>
 <p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 88 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
 <h3>8.2 局限</h3>
-<p>团队 DeepSeek Flash 已完成首轮真实验收，控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 <code>/api/compare</code> 仍把原材料误报为删除，需要改用 A 侧归一化对比；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
+<p>团队 DeepSeek Flash 已完成首轮真实验收，控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 <code>/api/compare</code> 已改为补充通知增量合并，06+07 复测通过；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
 <h3>8.3 社会价值与商业潜力</h3>
 <p><strong>社会价值</strong>：</p>
 <ul>
@@ -1564,7 +1564,7 @@ powershell -ExecutionPolicy Bypass -File ..\scripts\build_tech_pdf.ps1
 </tr>
 <tr>
 <td><code>smoke_test_hardening.py</code></td>
-<td>16/16</td>
+<td>18/18</td>
 </tr>
 <tr>
 <td><code>smoke_test_perf.py</code>（Mock 100 次）</td>

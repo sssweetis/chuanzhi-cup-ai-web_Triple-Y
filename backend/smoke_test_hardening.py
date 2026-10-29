@@ -7,6 +7,7 @@ import urllib.request
 import uuid
 
 from rate_limit import SlidingWindowLimiter
+from compare_store import compare_matters
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000").rstrip("/")
 PASS, FAIL = "✅", "❌"
@@ -108,6 +109,18 @@ def main():
     same_diff = ((same_cmp.get("data") or {}).get("diff") or {})
     check("双通知无差异", same_cmp.get("success") is True and same_diff.get("has_difference") is False,
           "changed=%s" % same_diff.get("has_difference"))
+
+    incremental = compare_matters(
+        {"materials": [{"material_name": "A form"}, {"material_name": "B score"}]},
+        {"materials": [{"material_name": "C recommendation"}]},
+        "original",
+        "supplement: add C recommendation",
+    )
+    check("补充通知增量合并不误报删除",
+          incremental["materials"]["only_left"] == []
+          and "B score" in incremental["materials"]["common"]
+          and incremental["materials"]["only_right"] == ["C recommendation"],
+          str(incremental["materials"]))
     same_id = (same_cmp.get("data") or {}).get("comparison_id")
     if same_id:
         jcall("DELETE", "/api/compare/%s" % same_id, headers={"X-Session-Id": session})

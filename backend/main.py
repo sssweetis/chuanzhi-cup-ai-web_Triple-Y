@@ -51,6 +51,10 @@ try:
     from service import ask_question_with_rag  # noqa: E402
 except ImportError:
     ask_question_with_rag = None
+try:
+    from service import compare_notifications as compare_with_a_rules  # noqa: E402
+except ImportError:
+    compare_with_a_rules = None
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import (build_prepare_list, save_prepare_list, load_prepare_list,
@@ -478,6 +482,66 @@ def _compare_side(side: CompareSideRequest, label: str):
     return source, None
 
 
+def _item_names(items, key):
+    return [str(x.get(key)) for x in (items or []) if isinstance(x, dict) and x.get(key)]
+
+
+def _compare_diff_compat(left, right, service_diff):
+    """把 A 的补充通知 diff 映射成前端现有的 materials/steps 兼容结构。"""
+    left_names = _item_names((left.get("matter") or {}).get("materials"), "material_name")
+    right_names = _item_names((right.get("matter") or {}).get("materials"), "material_name")
+    removed = _item_names(service_diff.get("removed_materials"), "material_name")
+    added = _item_names(service_diff.get("added_materials"), "material_name")
+    changed_old, changed_new = [], []
+    for pair in service_diff.get("changed_materials") or []:
+        if isinstance(pair, dict):
+            old = pair.get("old") or {}
+            new = pair.get("new") or {}
+            if old.get("material_name"):
+                changed_old.append(str(old["material_name"]))
+            if new.get("material_name"):
+                changed_new.append(str(new["material_name"]))
+    only_left = list(dict.fromkeys(removed + changed_old))
+    only_right = list(dict.fromkeys(added + changed_new))
+    common = [n for n in left_names if n not in only_left]
+    left_steps = _item_names((left.get("matter") or {}).get("step_list"), "title")
+    right_steps = _item_names((right.get("matter") or {}).get("step_list"), "title")
+    step_removed = _item_names(service_diff.get("removed_steps"), "title")
+    step_added = _item_names(service_diff.get("added_steps"), "title")
+    old_deadline = service_diff.get("old_deadline")
+    new_deadline = service_diff.get("new_deadline")
+    return {
+        "deadline": {
+            "left": {"due_at": old_deadline},
+            "right": {"due_at": new_deadline},
+            "changed": old_deadline != new_deadline,
+        },
+        "materials": {
+            "common": list(dict.fromkeys(common)),
+            "only_left": only_left,
+            "only_right": only_right,
+            "changed": bool(only_left or only_right),
+        },
+        "steps": {
+            "common": [n for n in left_steps if n not in step_removed],
+            "only_left": step_removed,
+            "only_right": step_added,
+            "changed": bool(step_removed or step_added),
+        },
+        "has_difference": bool(
+            old_deadline != new_deadline or only_left or only_right or step_removed or step_added
+            or service_diff.get("changes")
+        ),
+        "engine": "a_rules",
+        "changes": service_diff.get("changes") or [],
+        "confirmation_needed": service_diff.get("confirmation_needed") or [],
+        "requires_confirmation": bool(service_diff.get("requires_confirmation")),
+        "affected_todos": service_diff.get("affected_todos") or [],
+        "reasoning": service_diff.get("reasoning") or "",
+        "service_diff": service_diff,
+    }
+
+
 @app.post("/api/compare", response_model=AnalyzeResponse)
 def compare_notifications(req: CompareRequest, request: Request):
     """两份通知分别解析并保留各自来源，返回截止时间/材料/步骤差异。"""
@@ -487,7 +551,27 @@ def compare_notifications(req: CompareRequest, request: Request):
     right, error = _compare_side(req.right, "右侧")
     if error:
         return error
-    diff = compare_matters(left["matter"], right["matter"])
+    diff = None
+    left_text = (req.left.text or "").strip()
+    right_text = (req.right.text or "").strip()
+    if (compare_with_a_rules is not None and left_text and right_text
+            and (os.getenv("COMPARE_USE_A_SERVICE") or "0").strip() == "1"):
+        try:
+            compared = compare_with_a_rules(
+                left_text,
+                right_text,
+                original_matter=left["matter"],
+                supplement_matter=right["matter"],
+                use_llm=(os.getenv("COMPARE_USE_LLM") or "0").strip() == "1",
+            )
+            if isinstance(compared, dict) and compared.get("success"):
+                service_diff = (compared.get("data") or {}).get("diff") or {}
+                diff = _compare_diff_compat(left, right, service_diff)
+        except Exception as e:
+            logger.warning("A 的补充通知对比失败，回退 C 侧差异比较：%s", e)
+    if diff is None:
+        diff = compare_matters(left["matter"], right["matter"], left_text, right_text)
+        diff["engine"] = "c_fallback"
     record = save_comparison(left, right, diff, _session_id(request))
     return {"success": True, "data": record, "error": None}
 

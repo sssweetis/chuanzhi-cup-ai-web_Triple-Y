@@ -74,7 +74,33 @@ def _deadline(matter: dict) -> dict:
             "date_info": info}
 
 
-def compare_matters(left: dict, right: dict) -> dict:
+
+
+_REPLACEMENT_HINTS = ("取消", "不再", "改为", "替换", "不提交", "无需", "删除")
+
+
+def _merge_incremental(right_matter: dict, left_matter: dict, right_text: str):
+    """补充通知默认按增量处理；只有明确取消/替换时才让它覆盖原清单。"""
+    if not right_text or any(hint in right_text for hint in _REPLACEMENT_HINTS):
+        return right_matter
+    merged = dict(right_matter or {})
+    for field, name_key in (("materials", "material_name"), ("step_list", "title")):
+        current = [x for x in (merged.get(field) or []) if isinstance(x, dict)]
+        seen = {_norm(x.get(name_key)) for x in current if x.get(name_key)}
+        for item in (left_matter or {}).get(field) or []:
+            if not isinstance(item, dict) or not item.get(name_key):
+                continue
+            if _norm(item.get(name_key)) not in seen:
+                current.append(item)
+                seen.add(_norm(item.get(name_key)))
+        if current:
+            merged[field] = current
+    return merged
+
+def compare_matters(left: dict, right: dict, left_text: str = "", right_text: str = "") -> dict:
+    # 补充通知经常只写“新增某项”，不会重复列出原通知已有材料。
+    # 默认增量合并，避免把原有的报名表/成绩单误报成 only_left。
+    right = _merge_incremental(right, left, right_text)
     left_deadline, right_deadline = _deadline(left), _deadline(right)
     left_materials = _named(left.get("materials"), "material_name")
     right_materials = _named(right.get("materials"), "material_name")

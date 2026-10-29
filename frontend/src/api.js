@@ -2,6 +2,8 @@
 // 响应信封统一为 HTTP 200 + { success, data, error }，这里拆开返回 data / 抛 error
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
 const TIMEOUT = 90_000
+let SESSION_ID = localStorage.getItem('zhiban-session-id')
+if (!SESSION_ID) { SESSION_ID = 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); localStorage.setItem('zhiban-session-id', SESSION_ID) }
 
 async function request(path, { method = 'POST', body } = {}) {
   const ctrl = new AbortController()
@@ -10,7 +12,7 @@ async function request(path, { method = 'POST', body } = {}) {
   try {
     res = await fetch(BASE_URL + path, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
       body: body ? JSON.stringify(body) : undefined,
       signal: ctrl.signal
     })
@@ -99,7 +101,7 @@ export async function analyzePdf(file) {
 // POST /api/evidence  {matter, target_type, target_id} → {found, title, quote, is_suggestion, note}
 export async function getEvidence(payload) {
   const res = await fetch(BASE_URL + '/api/evidence', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
     body: JSON.stringify(payload)
   })
   return (await res.json()).data
@@ -124,7 +126,7 @@ export async function listFiles() {
 // POST /api/files/search  {query} → [{file_id, filename, chunk_id, text, score}]
 export async function searchFiles(query) {
   const res = await fetch(BASE_URL + '/api/files/search', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
     body: JSON.stringify({ query })
   })
   return (await res.json()).data || []
@@ -133,7 +135,7 @@ export async function searchFiles(query) {
 // POST /api/ask  {question, file_ids?} → {answer, sources}
 export async function askQuestion(payload) {
   const res = await fetch(BASE_URL + '/api/ask', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
     body: JSON.stringify(payload)
   })
   const p = await res.json()

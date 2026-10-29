@@ -105,7 +105,7 @@ export function renderInputPanel(mount) {
       return
     }
     if (e.target.closest('#confirmUpdateBtn')) {
-      alert('已确认，任务清单将按新通知更新')
+      toast('已确认，任务清单将按新通知更新')
     }
   })
 
@@ -131,7 +131,7 @@ export function renderInputPanel(mount) {
           state.tasks.push({ id: Date.now(), title, date: due, done: false, sourceText: srcText })
         }
         setState({})
-        alert('已加入任务清单')
+        toast('已加入任务清单')
       }
     } else {
       zone.innerHTML = `<div class="ph">分析结果会显示在这里</div>`
@@ -143,7 +143,7 @@ export function renderInputPanel(mount) {
     const text = mount.querySelector('#taskInput').value.trim()
     const imgFile = mount.querySelector('#imgInput').files[0]
     const pdfFile = mount.querySelector('#pdfInput').files[0]
-    if (!text && !imgFile && !pdfFile) { alert('先粘贴一段通知，或上传截图/PDF'); return }
+    if (!text && !imgFile && !pdfFile) { toast('先粘贴一段通知，或上传截图/PDF'); return }
     setState({ analyzing: true, analyzeError: '', analyzeResult: null })
     paint()
     try {
@@ -310,7 +310,7 @@ export function renderInputPanel(mount) {
   // 语音输入（浏览器原生识别，不支持则提示）
   mount.querySelector('#micBtn').onclick = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('当前浏览器不支持语音输入（推荐 Chrome）'); return }
+    if (!SR) { toast('当前浏览器不支持语音输入（推荐 Chrome）'); return }
     const rec = new SR(); rec.lang = 'zh-CN'
     rec.onresult = e => { mount.querySelector('#taskInput').value = e.results[0][0].transcript }
     rec.start()

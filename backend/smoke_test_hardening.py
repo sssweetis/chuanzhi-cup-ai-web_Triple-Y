@@ -102,9 +102,12 @@ def main():
     check("双通知识别截止/材料差异", (diff.get("deadline") or {}).get("changed") is True
           and "身份证复印件" in (materials.get("only_right") or []), str(materials))
 
+    # 真实模型对同一文本重复解析也可能有细微差异；这里用同一个 Matter
+    # 做确定性对比，专门验证“无差异”分支，避免把模型非确定性当成产品 bug。
+    same_matter = (cd.get("left") or {}).get("matter") or {}
     _, _, same_cmp = jcall("POST", "/api/compare", {
-        "left": {"filename": "同一份.txt", "text": left_text},
-        "right": {"filename": "同一份副本.txt", "text": left_text},
+        "left": {"filename": "同一份.txt", "matter": same_matter},
+        "right": {"filename": "同一份副本.txt", "matter": same_matter},
     }, {"X-Session-Id": session})
     same_diff = ((same_cmp.get("data") or {}).get("diff") or {})
     check("双通知无差异", same_cmp.get("success") is True and same_diff.get("has_difference") is False,

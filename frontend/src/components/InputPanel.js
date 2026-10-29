@@ -112,7 +112,7 @@ export function renderInputPanel(mount) {
       return
     }
     if (e.target.closest('#confirmUpdateBtn')) {
-      const m = state.analyzeResult
+      const m = state.compareMatter || state.analyzeResult
       const matterId = m && (m.matter_id || m.id)
       if (matterId) {
         const todos = state.comparePreviewTodo || (state.tasks.filter(t => t.generated).map(t => ({ action: t.title, status: t.done ? 'completed' : 'not_started' })))
@@ -329,6 +329,7 @@ export function renderInputPanel(mount) {
       const affected = (d.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')
       if (d.preview_todo_list) state.comparePreviewTodo = d.preview_todo_list
       else if (d.affected_todos && d.affected_todos.length) state.comparePreviewTodo = d.affected_todos.map(t => ({ action: t, status: 'not_started' }))
+      state.compareMatter = res.right?.matter || res.left?.matter || state.analyzeResult
       zone.innerHTML = `<div class="matter-card"><h3>🔄 通知对比结果</h3>
         <div style="margin:10px 0">${changes}</div>
         ${affected ? `<div class="affected-box"><b>受影响待办：</b><ul>${affected}</ul></div>` : ''}

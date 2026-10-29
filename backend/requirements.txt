@@ -12,3 +12,6 @@ openai>=1.0.0
 jsonschema>=4.0.0
 python-multipart>=0.0.9
 pypdf>=4.0.0
+
+# --- 文档构建（仅重新导出技术文档 PDF 时需要）---
+markdown>=3.6.0

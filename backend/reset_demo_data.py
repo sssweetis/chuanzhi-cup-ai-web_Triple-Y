@@ -3,7 +3,7 @@
 import os
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-for name in ("files.json", "prepare_lists.json"):
+for name in ("files.json", "prepare_lists.json", "comparisons.json"):
     path = os.path.join(DATA, name)
     if os.path.exists(path):
         os.remove(path)

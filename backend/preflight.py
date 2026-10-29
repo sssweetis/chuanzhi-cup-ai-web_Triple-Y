@@ -26,16 +26,31 @@ def check(name, ok, detail=""):
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
 
 
-def post_json(path, payload, timeout=90):
+def post_json(path, payload, timeout=90, headers=None):
+    hdrs = {"Content-Type": "application/json"}
+    hdrs.update(headers or {})
     req = urllib.request.Request(BASE + path,
                                  data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                                 headers={"Content-Type": "application/json"}, method="POST")
+                                 headers=hdrs, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
-def get_json(path, timeout=30):
-    with urllib.request.urlopen(BASE + path, timeout=timeout) as r:
+def get_json(path, timeout=30, headers=None):
+    req = urllib.request.Request(BASE + path, headers=headers or {}, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def get_raw(path, timeout=30, headers=None):
+    req = urllib.request.Request(BASE + path, headers=headers or {}, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.status, dict(r.headers), r.read()
+
+
+def delete_json(path, timeout=30, headers=None):
+    req = urllib.request.Request(BASE + path, headers=headers or {}, method="DELETE")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
@@ -79,6 +94,40 @@ def main():
     pd = prep.get("data") or {}
     check("准备清单 /api/prepare-list", prep.get("success") is True and len(pd.get("todo_list") or []) >= 1,
           "%d 条待办 | %s" % (len(pd.get("todo_list") or []), pd.get("summary")))
+
+    session_headers = {"X-Session-Id": "preflight-check"}
+    date_check = get_json("/api/tools/check-date?date=2026-11-02")
+    dd = date_check.get("data") or {}
+    check("日期核对 /api/tools/check-date", date_check.get("success") is True and dd.get("weekday") == "周一",
+          "%s | %s" % (dd.get("weekday"), dd.get("deadline_label")))
+
+    cmp = post_json("/api/compare", {
+        "left": {"filename": "旧通知.txt", "text": "请于2026年11月2日17:00前提交报名表和成绩单。"},
+        "right": {"filename": "新通知.txt", "text": "请于2026年11月3日18:00前提交报名表、成绩单和身份证复印件。"},
+    }, headers=session_headers)
+    cmp_data = cmp.get("data") or {}
+    cmp_diff = cmp_data.get("diff") or {}
+    check("双通知对比 /api/compare", cmp.get("success") is True
+          and bool(cmp_data.get("comparison_id")) and (cmp_diff.get("deadline") or {}).get("changed") is True,
+          "材料差异=%s" % ((cmp_diff.get("materials") or {}).get("only_right") or []))
+
+    matter_id = data.get("id") or "preflight_matter"
+    todo_v1 = [{"todo_id": "todo_1", "action": "准备材料（v1）", "status": "pending", "source_ref": {"quote": "准备材料"}}]
+    todo_v2 = [{"todo_id": "todo_1", "action": "准备材料（v2）", "status": "completed", "source_ref": {"quote": "准备材料"}}]
+    save1 = post_json("/api/prepare-list/save", {"matter_id": matter_id, "title": "演示清单", "todo_list": todo_v1}, headers=session_headers)
+    save2 = post_json("/api/prepare-list/save", {"matter_id": matter_id, "title": "演示清单", "todo_list": todo_v2}, headers=session_headers)
+    hist = get_json("/api/prepare-list/%s/history" % matter_id, headers=session_headers)
+    check("清单版本历史 /api/prepare-list/.../history", save1.get("success") is True and save2.get("success") is True
+          and len((hist.get("data") or {}).get("history") or []) >= 1,
+          "version=%s" % ((save2.get("data") or {}).get("version")))
+
+    st_export, _, raw_export = get_raw("/api/prepare-list/%s/export?format=csv" % matter_id, headers=session_headers)
+    check("清单导出 /api/prepare-list/.../export", st_export == 200
+          and "准备材料（v2）" in raw_export.decode("utf-8-sig"), "CSV %d bytes" % len(raw_export))
+
+    if cmp_data.get("comparison_id"):
+        delete_json("/api/compare/%s" % cmp_data["comparison_id"], headers=session_headers)
+    delete_json("/api/prepare-list/%s" % matter_id, headers=session_headers)
 
     a = upload("/api/files", KIT / "01-标准通知-奖学金.txt", "file")
     b = upload("/api/files", KIT / "03-材料视频通知.txt", "file")

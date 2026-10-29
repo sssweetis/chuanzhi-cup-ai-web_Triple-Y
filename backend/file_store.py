@@ -104,7 +104,7 @@ def _public(record: dict) -> dict:
     }
 
 
-def save_file(filename: str, content_type: str, raw: bytes) -> dict:
+def save_file(filename: str, content_type: str, raw: bytes, session_id: str = "default") -> dict:
     ext = os.path.splitext(filename or "")[1].lower()
     if ext not in ALLOWED_EXTS:
         raise ValueError("仅支持 TXT / MD / PDF 文件（收到：%s）" % (ext or "未知"))
@@ -138,6 +138,7 @@ def save_file(filename: str, content_type: str, raw: bytes) -> dict:
         "file_id": file_id, "filename": filename, "content_type": content_type,
         "size": len(raw), "chars": len(text), "text": text, "chunks": chunks,
         "created_at": datetime.now(TZ).isoformat(),
+        "session_id": session_id or "default",
     }
     with _LOCK:
         data = _load()
@@ -146,28 +147,34 @@ def save_file(filename: str, content_type: str, raw: bytes) -> dict:
     return _public(record)
 
 
-def list_files() -> List[dict]:
+def list_files(session_id: str = "default") -> List[dict]:
+    owner = session_id or "default"
     with _LOCK:
         data = _load()
-    return [_public(r) for r in sorted(data.values(), key=lambda x: x.get("created_at", ""), reverse=True)]
+    records = [r for r in data.values() if (r.get("session_id") or "default") == owner]
+    return [_public(r) for r in sorted(records, key=lambda x: x.get("created_at", ""), reverse=True)]
 
 
-def get_file(file_id: str) -> Optional[dict]:
+def get_file(file_id: str, session_id: str = "default") -> Optional[dict]:
     with _LOCK:
         data = _load()
     rec = data.get(file_id)
-    if not rec:
+    if not rec or (rec.get("session_id") or "default") != (session_id or "default"):
         return None
     return {**_public(rec), "chunks": rec.get("chunks") or []}
 
 
-def search_files(query: str, file_ids: Optional[List[str]] = None, top_k: int = 5) -> List[dict]:
+def search_files(query: str, file_ids: Optional[List[str]] = None, top_k: int = 5,
+                 session_id: str = "default") -> List[dict]:
     if not _norm(query):
         return []
     with _LOCK:
         data = _load()
     hits = []
+    owner = session_id or "default"
     for rec in data.values():
+        if (rec.get("session_id") or "default") != owner:
+            continue
         if file_ids and rec["file_id"] not in file_ids:
             continue
         for c in rec.get("chunks") or []:
@@ -182,12 +189,28 @@ def search_files(query: str, file_ids: Optional[List[str]] = None, top_k: int = 
     return hits[:max(1, min(int(top_k or 5), 20))]
 
 
-def collect_text(file_ids: Optional[List[str]] = None) -> str:
+def collect_text(file_ids: Optional[List[str]] = None, session_id: str = "default") -> str:
     with _LOCK:
         data = _load()
     parts = []
+    owner = session_id or "default"
     for rec in data.values():
+        if (rec.get("session_id") or "default") != owner:
+            continue
         if file_ids and rec["file_id"] not in file_ids:
             continue
         parts.append("【%s】\n%s" % (rec["filename"], rec.get("text", "")))
     return "\n\n".join(parts)
+
+def delete_file(file_id: str, session_id: str = "default") -> bool:
+    """删除本会话的文件；其他会话不可见、不可删。"""
+    if not file_id:
+        return False
+    with _LOCK:
+        data = _load()
+        rec = data.get(file_id)
+        if not rec or (rec.get("session_id") or "default") != (session_id or "default"):
+            return False
+        del data[file_id]
+        _save(data)
+    return True

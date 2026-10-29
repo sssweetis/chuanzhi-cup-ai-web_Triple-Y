@@ -23,6 +23,7 @@ C 的后端入口（FastAPI）—— 通知抽取服务
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -38,7 +39,7 @@ load_dotenv()
 from fastapi import FastAPI, File, Request, UploadFile  # noqa: E402
 from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.responses import JSONResponse, Response  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from service import analyze_notification, ask_question  # noqa: E402
@@ -52,14 +53,20 @@ except ImportError:
     ask_question_with_rag = None
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
-from prepare_list import build_prepare_list, save_prepare_list, load_prepare_list  # noqa: E402
+from prepare_list import (build_prepare_list, save_prepare_list, load_prepare_list,
+                          load_prepare_list_history, delete_prepare_list)  # noqa: E402
 from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
 from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
 from pdf_analyzer import PDF_MAX_BYTES, PDF_MAX_PAGES, extract_pdf_text  # noqa: E402
 from file_store import (FILE_MAX_BYTES, ALLOWED_EXTS, save_file as save_uploaded_file,
-                        list_files, get_file, search_files, collect_text)  # noqa: E402
+                        list_files, get_file, search_files, collect_text, delete_file)  # noqa: E402
 
 logger = logging.getLogger("main")
+from compare_store import (compare_matters, save_comparison, get_comparison,
+                           list_comparisons, delete_comparison)  # noqa: E402
+from date_tool import check_date  # noqa: E402
+from export_tools import export_prepare_list_csv, export_prepare_list_markdown  # noqa: E402
+from rate_limit import limiter, is_rate_limit_enabled, limit_for_path  # noqa: E402
 
 # ==================== 配置 ====================
 
@@ -117,6 +124,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ==================== 会话隔离 / 限流 ====================
+
+def _session_id(request: Request) -> str:
+    raw = (request.headers.get("x-session-id") or request.query_params.get("session_id") or "default").strip()
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", raw)[:64]
+    return safe or "default"
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if request.method != "OPTIONS" and is_rate_limit_enabled():
+        path = request.url.path
+        limit = limit_for_path(path)
+        if limit > 0:
+            forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+            client_ip = forwarded or (request.client.host if request.client else "unknown")
+            allowed, remaining, retry_after = limiter.hit("%s:%s" % (client_ip, path), limit)
+            if not allowed:
+                return JSONResponse(
+                    status_code=200,
+                    content={"success": False, "data": None,
+                             "error": "请求过于频繁，请 %d 秒后再试" % retry_after},
+                    headers={"Retry-After": str(retry_after), "X-RateLimit-Limit": str(limit),
+                             "X-RateLimit-Remaining": "0"},
+                )
+            response = await call_next(request)
+            response.headers["X-RateLimit-Limit"] = str(limit)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
+            return response
+    return await call_next(request)
 
 
 # ==================== 请求 / 响应模型 ====================
@@ -278,8 +317,11 @@ class PrepareListRequest(BaseModel):
 
 class SavePrepareListRequest(BaseModel):
     matter_id: str
+    title: Optional[str] = None
     todo_list: List[dict]
     checked_material_ids: Optional[List[str]] = None
+    # 前端点击“保存/确认”时才调用本接口；不提供自动保存路径。
+    confirmed: Optional[bool] = None
 
 
 def _matter_from_request(matter, text):
@@ -312,10 +354,11 @@ def prepare_list(req: PrepareListRequest):
 
 
 @app.post("/api/prepare-list/save", response_model=AnalyzeResponse)
-def save_prepare_list_endpoint(req: SavePrepareListRequest):
-    """保存（修改后的）准备清单，刷新/换浏览器可恢复。"""
+def save_prepare_list_endpoint(req: SavePrepareListRequest, request: Request):
+    """用户确认后保存；自动保留修改前版本，不覆盖历史。"""
     try:
-        record = save_prepare_list(req.matter_id, req.todo_list, req.checked_material_ids)
+        record = save_prepare_list(req.matter_id, req.todo_list, req.checked_material_ids,
+                                   session_id=_session_id(request), title=req.title)
     except ValueError as e:
         return _fail(str(e))
     except Exception as e:
@@ -324,13 +367,121 @@ def save_prepare_list_endpoint(req: SavePrepareListRequest):
     return {"success": True, "data": record, "error": None}
 
 
+@app.get("/api/prepare-list/{matter_id}/history", response_model=AnalyzeResponse)
+def prepare_list_history(matter_id: str, request: Request):
+    """查看当前版本与最近 5 次修改前版本。"""
+    history = load_prepare_list_history(matter_id, _session_id(request))
+    if not history:
+        return _fail("没有找到保存的准备清单")
+    return {"success": True, "data": history, "error": None}
+
+
+@app.get("/api/prepare-list/{matter_id}/export")
+def export_prepare_list(matter_id: str, request: Request, format: str = "csv"):
+    """下载已保存清单；format=csv（默认）或 md。"""
+    record = load_prepare_list(matter_id, _session_id(request))
+    if not record:
+        return JSONResponse(status_code=200, content=_fail("没有找到保存的准备清单"))
+    fmt = (format or "csv").lower()
+    if fmt not in ("csv", "md", "markdown"):
+        return JSONResponse(status_code=200, content=_fail("导出格式仅支持 csv 或 md"))
+    if fmt == "csv":
+        body = export_prepare_list_csv(record)
+        return Response(content=body, media_type="text/csv; charset=utf-8", headers={
+            "Content-Disposition": 'attachment; filename="prepare-list.csv"'})
+    body = export_prepare_list_markdown(record)
+    return Response(content=body, media_type="text/markdown; charset=utf-8", headers={
+        "Content-Disposition": 'attachment; filename="prepare-list.md"'})
+
+
+@app.delete("/api/prepare-list/{matter_id}", response_model=AnalyzeResponse)
+def prepare_list_delete(matter_id: str, request: Request):
+    if not delete_prepare_list(matter_id, _session_id(request)):
+        return _fail("没有找到保存的准备清单")
+    return {"success": True, "data": {"matter_id": matter_id, "deleted": True}, "error": None}
+
+
 @app.get("/api/prepare-list/{matter_id}", response_model=AnalyzeResponse)
-def get_prepare_list(matter_id: str):
-    """读取上次保存的准备清单。"""
-    record = load_prepare_list(matter_id)
+def get_prepare_list(matter_id: str, request: Request):
+    """读取当前会话上次保存的准备清单。"""
+    record = load_prepare_list(matter_id, _session_id(request))
     if not record:
         return _fail("没有找到保存的准备清单")
     return {"success": True, "data": record, "error": None}
+
+
+# ==================== 10/30：日期核对 ====================
+
+@app.get("/api/tools/check-date", response_model=AnalyzeResponse)
+def tools_check_date(date: str):
+    try:
+        info = check_date(date)
+    except ValueError as e:
+        return _fail(str(e))
+    return {"success": True, "data": info, "error": None}
+
+
+# ==================== 10/28：双通知对比 ====================
+
+class CompareSideRequest(BaseModel):
+    filename: Optional[str] = None
+    text: Optional[str] = None
+    matter: Optional[dict] = None
+
+
+class CompareRequest(BaseModel):
+    left: CompareSideRequest
+    right: CompareSideRequest
+
+
+def _compare_side(side: CompareSideRequest, label: str):
+    matter, error = _matter_from_request(side.matter, side.text)
+    if error:
+        return None, error
+    filename = (side.filename or "").strip() or ("%s通知" % label)
+    source = {
+        "filename": filename,
+        "input_type": "matter" if isinstance(side.matter, dict) and side.matter else "text",
+        "source_ref": {"filename": filename},
+        "original_text": (side.text or "").strip() or None,
+        "matter": matter,
+    }
+    return source, None
+
+
+@app.post("/api/compare", response_model=AnalyzeResponse)
+def compare_notifications(req: CompareRequest, request: Request):
+    """两份通知分别解析并保留各自来源，返回截止时间/材料/步骤差异。"""
+    left, error = _compare_side(req.left, "左侧")
+    if error:
+        return error
+    right, error = _compare_side(req.right, "右侧")
+    if error:
+        return error
+    diff = compare_matters(left["matter"], right["matter"])
+    record = save_comparison(left, right, diff, _session_id(request))
+    return {"success": True, "data": record, "error": None}
+
+
+@app.get("/api/compare", response_model=AnalyzeResponse)
+def compare_list(request: Request):
+    items = list_comparisons(_session_id(request))
+    return {"success": True, "data": {"items": items, "total": len(items)}, "error": None}
+
+
+@app.get("/api/compare/{comparison_id}", response_model=AnalyzeResponse)
+def compare_get(comparison_id: str, request: Request):
+    record = get_comparison(comparison_id, _session_id(request))
+    if not record:
+        return _fail("没有找到该对比记录")
+    return {"success": True, "data": record, "error": None}
+
+
+@app.delete("/api/compare/{comparison_id}", response_model=AnalyzeResponse)
+def compare_delete(comparison_id: str, request: Request):
+    if not delete_comparison(comparison_id, _session_id(request)):
+        return _fail("没有找到该对比记录")
+    return {"success": True, "data": {"comparison_id": comparison_id, "deleted": True}, "error": None}
 
 
 # ==================== 10/23：图片解析（截图 → Matter）====================
@@ -503,26 +654,27 @@ def files_limits():
 
 
 @app.get("/api/files")
-def files_list():
+def files_list(request: Request):
     """已上传材料列表（不含全文）。"""
-    return {"success": True, "data": {"items": list_files()}, "error": None}
+    return {"success": True, "data": {"items": list_files(_session_id(request))}, "error": None}
 
 
 @app.post("/api/files/search", response_model=AnalyzeResponse)
-def files_search(req: FileSearchRequest):
+def files_search(req: FileSearchRequest, request: Request):
     """在已上传材料里检索相关片段（确定性打分，不调模型）。"""
     if not (req.query or "").strip():
         return _fail("检索内容不能为空")
-    hits = search_files(req.query, req.file_ids, req.top_k or 5)
+    hits = search_files(req.query, req.file_ids, req.top_k or 5, _session_id(request))
     return {"success": True, "data": {"query": req.query, "hits": hits, "total": len(hits)}, "error": None}
 
 
 @app.post("/api/files", response_model=AnalyzeResponse)
-async def files_upload(file: UploadFile = File(...)):
+async def files_upload(request: Request, file: UploadFile = File(...)):
     """上传材料（TXT / MD / 文字型 PDF），切片段并编号。"""
     raw = await file.read(FILE_MAX_BYTES + 1)
     try:
-        record = save_uploaded_file(file.filename or "upload", file.content_type or "", raw)
+        record = save_uploaded_file(file.filename or "upload", file.content_type or "", raw,
+                                   session_id=_session_id(request))
     except ValueError as e:
         return _fail(str(e))
     except Exception as e:
@@ -532,20 +684,29 @@ async def files_upload(file: UploadFile = File(...)):
 
 
 @app.get("/api/files/{file_id}", response_model=AnalyzeResponse)
-def files_get(file_id: str):
-    record = get_file(file_id)
+def files_get(file_id: str, request: Request):
+    record = get_file(file_id, _session_id(request))
     if not record:
         return _fail("没有找到该文件")
     return {"success": True, "data": record, "error": None}
 
 
+
+@app.delete("/api/files/{file_id}", response_model=AnalyzeResponse)
+def files_delete(file_id: str, request: Request):
+    if not delete_file(file_id, _session_id(request)):
+        return _fail("没有找到该文件")
+    return {"success": True, "data": {"file_id": file_id, "deleted": True}, "error": None}
+
+
 @app.post("/api/ask", response_model=AnalyzeResponse)
-def ask(req: AskRequest):
+def ask(req: AskRequest, request: Request):
     """先查材料，再回答；材料外问题不乱答。有 Key 时用 A 的问答，否则返回检索到的原文。"""
     question = (req.question or "").strip()
     if not question:
         return _fail("问题不能为空")
-    hits = search_files(question, req.file_ids, req.top_k or 5)
+    session_id = _session_id(request)
+    hits = search_files(question, req.file_ids, req.top_k or 5, session_id)
     if not hits:
         return {"success": True, "data": {
             "answer": "在已上传的材料中没有找到与这个问题相关的原文，无法回答。",
@@ -555,7 +716,7 @@ def ask(req: AskRequest):
                 "quote": h["text"][:300], "score": h["score"]} for h in hits]
 
     # A 的 RAG 防幻觉问答（优先）：docs 传材料原文，返回 found_evidence / evidence_chunks
-    docs = collect_text(req.file_ids)
+    docs = collect_text(req.file_ids, session_id)
     if not docs.strip() and isinstance(req.matter, dict):
         docs = "\n".join((x.get("quote") or "") for x in (req.matter.get("sources") or []) if isinstance(x, dict))
     if ask_question_with_rag is not None and docs.strip():

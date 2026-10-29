@@ -106,43 +106,109 @@ def build_prepare_list(matter, checked_material_ids=None):
     }
 
 
-def save_prepare_list(matter_id, todo_list, checked_material_ids=None):
+def _key(session_id, matter_id):
+    return matter_id if (session_id or "default") == "default" else "%s:%s" % (session_id, matter_id)
+
+
+def _load_all():
+    if not os.path.exists(STORE_PATH):
+        return {}
+    try:
+        with open(STORE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_all(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = STORE_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, STORE_PATH)
+
+
+def save_prepare_list(matter_id, todo_list, checked_material_ids=None, session_id="default", title=None):
+    """保存当前版本，并把修改前版本写入 history（最多保留最近 5 版）。"""
     if not matter_id:
         raise ValueError("matter_id 不能为空")
     if not isinstance(todo_list, list):
         raise ValueError("todo_list 必须是数组")
 
+    owner = session_id or "default"
     with _LOCK:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        data = {}
-        if os.path.exists(STORE_PATH):
-            try:
-                with open(STORE_PATH, encoding="utf-8") as f:
-                    data = json.load(f)
-                if not isinstance(data, dict):
-                    data = {}
-            except Exception:
-                data = {}
+        data = _load_all()
+        key = _key(owner, matter_id)
+        old = data.get(key) or {}
+        history = list(old.get("history") or [])
+        previous_todo_list = []
+        if old:
+            previous_todo_list = list(old.get("todo_list") or [])
+            history.append({
+                "version": old.get("version", len(history) + 1),
+                "todo_list": previous_todo_list,
+                "checked_material_ids": list(old.get("checked_material_ids") or []),
+                "saved_at": old.get("saved_at"),
+            })
+            history = history[-5:]
+        version = int(old.get("version") or 0) + 1
         record = {
             "matter_id": matter_id,
+            "session_id": owner,
+            "title": old.get("title") or title,
             "todo_list": todo_list,
+            "previous_todo_list": previous_todo_list,
+            "history": history,
+            "version": version,
             "checked_material_ids": list(checked_material_ids or []),
             "saved_at": datetime.now(TZ).isoformat(),
         }
-        data[matter_id] = record
-        tmp = STORE_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, STORE_PATH)
+        data[key] = record
+        _write_all(data)
     return record
 
 
-def load_prepare_list(matter_id):
-    if not matter_id or not os.path.exists(STORE_PATH):
+def load_prepare_list(matter_id, session_id="default"):
+    if not matter_id:
         return None
+    owner = session_id or "default"
     try:
         with open(STORE_PATH, encoding="utf-8") as f:
             data = json.load(f)
-        return data.get(matter_id) if isinstance(data, dict) else None
     except Exception:
         return None
+    if not isinstance(data, dict):
+        return None
+    record = data.get(_key(owner, matter_id))
+    if not record or (record.get("session_id") or "default") != owner:
+        return None
+    return record
+
+
+def load_prepare_list_history(matter_id, session_id="default"):
+    record = load_prepare_list(matter_id, session_id)
+    if not record:
+        return None
+    return {
+        "matter_id": matter_id,
+        "version": record.get("version", 1),
+        "saved_at": record.get("saved_at"),
+        "previous_todo_list": record.get("previous_todo_list") or [],
+        "history": record.get("history") or [],
+    }
+
+
+def delete_prepare_list(matter_id, session_id="default"):
+    if not matter_id:
+        return False
+    owner = session_id or "default"
+    with _LOCK:
+        data = _load_all()
+        key = _key(owner, matter_id)
+        record = data.get(key)
+        if not record or (record.get("session_id") or "default") != owner:
+            return False
+        del data[key]
+        _write_all(data)
+    return True

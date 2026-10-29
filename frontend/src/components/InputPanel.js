@@ -322,8 +322,9 @@ export function renderInputPanel(mount) {
     try {
       const res = await compareNotifications({ left: { filename: '原通知', text: oldN }, right: { filename: '补充通知', text: newN } })
       const zone = mount.querySelector('#resultZone')
-      const changes = (res.changes || []).map(c => `<div class="diff-change diff-${c.type || 'info'}">${c.text || ''}</div>`).join('')
-      const affected = (res.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')
+      const d = res.diff || res
+      const changes = (d.changes || []).map(c => `<div class="diff-change diff-${c.type || 'info'}">${c.text || ''}</div>`).join('')
+      const affected = (d.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')
       zone.innerHTML = `<div class="matter-card"><h3>🔄 通知对比结果</h3>
         <div style="margin:10px 0">${changes}</div>
         ${affected ? `<div class="affected-box"><b>受影响待办：</b><ul>${affected}</ul></div>` : ''}

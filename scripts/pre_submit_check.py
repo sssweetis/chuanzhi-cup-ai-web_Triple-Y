@@ -120,7 +120,7 @@ def main():
     print("  · README「团队分工」是否写了真实姓名/GitHub 账号")
     print("  · docs/技术文档.md 的 4.1/4.2 已由 A 补完（检查最终 PDF 是否包含）")
     print("  · 演示视频是否已录（5–8 分钟、MP4、≥1080p）")
-    print("  · 技术文档 PDF 是否已按最终版重新导出（当前 16 页，≤30 页）")
+    print("  · 技术文档 PDF 是否已按最终版重新导出（当前 24 页，≤30 页）")
 
     print("\n" + "=" * 66)
     if problems:

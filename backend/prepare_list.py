@@ -245,6 +245,23 @@ def load_prepare_list_history(matter_id, session_id="default"):
     }
 
 
+def load_latest_prepare_list(session_id="default"):
+    """返回当前会话最近保存的一份清单，供 /api/export 无 matter_id 时使用。"""
+    owner = session_id or "default"
+    try:
+        with open(STORE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    records = [r for r in data.values() if isinstance(r, dict)
+               and (r.get("session_id") or "default") == owner]
+    if not records:
+        return None
+    return max(records, key=lambda r: r.get("saved_at") or "")
+
+
 def delete_prepare_list(matter_id, session_id="default"):
     if not matter_id:
         return False

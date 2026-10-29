@@ -162,6 +162,11 @@ def main():
 
     status_md, head_md, raw_md = call("GET", "/api/prepare-list/%s/export?format=md" % matter_id,
                                       headers={"X-Session-Id": session_a})
+
+    _, _, raw_generic = call("GET", "/api/export", headers={"X-Session-Id": session_a})
+    generic_text = raw_generic.decode("utf-8-sig")
+    check("任务清单通用导出 /api/export", "准备报名表（已修改）" in generic_text,
+          "bytes=%d" % len(raw_generic))
     text_md = raw_md.decode("utf-8")
     check("服务端导出 Markdown", status_md == 200 and "text/markdown" in header(head_md, "Content-Type")
           and "# 测试清单" in text_md and "v2" in text_md)

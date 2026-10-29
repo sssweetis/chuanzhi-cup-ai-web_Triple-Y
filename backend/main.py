@@ -58,7 +58,8 @@ except ImportError:
 from requirement_checker import check_requirements  # noqa: E402
 from mock_extractor import mock_extract  # noqa: E402
 from prepare_list import (build_prepare_list, save_prepare_list, load_prepare_list,
-                          load_prepare_list_history, delete_prepare_list)  # noqa: E402
+                          load_prepare_list_history, delete_prepare_list,
+                          load_latest_prepare_list)  # noqa: E402
 from image_analyzer import ALLOWED_IMAGE_TYPES, IMAGE_MAX_BYTES, analyze_image_bytes  # noqa: E402
 from evidence import build_evidence_index, find_evidence, TARGET_TYPES  # noqa: E402
 from pdf_analyzer import PDF_MAX_BYTES, PDF_MAX_PAGES, extract_pdf_text  # noqa: E402
@@ -413,6 +414,19 @@ def get_prepare_list(matter_id: str, request: Request):
     if not record:
         return _fail("没有找到保存的准备清单")
     return {"success": True, "data": record, "error": None}
+
+
+# ==================== 前端通用导出（B: /api/export）====================
+
+@app.get("/api/export")
+def export_current_tasks(request: Request):
+    """导出当前会话最近保存的准备清单，供任务清单页直接下载。"""
+    record = load_latest_prepare_list(_session_id(request))
+    if not record:
+        return JSONResponse(status_code=200, content=_fail("没有可导出的准备清单，请先保存一份清单"))
+    body = export_prepare_list_csv(record)
+    return Response(content=body, media_type="text/csv; charset=utf-8", headers={
+        "Content-Disposition": 'attachment; filename="tasks.csv"'})
 
 
 # ==================== 10/30：日期核对 ====================

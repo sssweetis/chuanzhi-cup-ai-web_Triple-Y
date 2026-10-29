@@ -113,8 +113,10 @@ export function renderInputPanel(mount) {
     }
     if (e.target.closest('#confirmUpdateBtn')) {
       const m = state.analyzeResult
-      if (m && m.matter_id) {
-        savePrepareList({ matter_id: m.matter_id, todo_list: state.tasks.filter(t => t.generated).map(t => ({ action: t.title, status: t.done ? 'completed' : 'not_started' })) })
+      const matterId = m && (m.matter_id || m.id)
+      if (matterId) {
+        const todos = state.comparePreviewTodo || (state.tasks.filter(t => t.generated).map(t => ({ action: t.title, status: t.done ? 'completed' : 'not_started' })))
+        savePrepareList({ matter_id: matterId, todo_list: todos })
           .then(() => toast('已保存到任务清单'))
           .catch(err => toast(err.message))
       } else {
@@ -325,9 +327,11 @@ export function renderInputPanel(mount) {
       const d = res.diff || res
       const changes = (d.changes || []).map(c => `<div class="diff-change diff-${c.type || 'info'}">${c.text || ''}</div>`).join('')
       const affected = (d.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')
+      if (d.preview_todo_list) state.comparePreviewTodo = d.preview_todo_list
       zone.innerHTML = `<div class="matter-card"><h3>🔄 通知对比结果</h3>
         <div style="margin:10px 0">${changes}</div>
         ${affected ? `<div class="affected-box"><b>受影响待办：</b><ul>${affected}</ul></div>` : ''}
+        <div style="margin-top:14px"><button class="btn" id="confirmUpdateBtn">✅ 确认并更新任务清单</button></div>
       </div>`
     } catch (err) { toast(err.message) }
   }

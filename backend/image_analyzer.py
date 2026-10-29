@@ -111,10 +111,12 @@ def analyze_image_bytes(raw: bytes, filename: str, content_type: str) -> Tuple[O
     if api_key:
         data_uri = "data:%s;base64,%s" % (content_type, base64.b64encode(raw).decode("utf-8"))
         result = _call_a_image(data_uri) or {}
-        if result.get("success") and result.get("data"):
+        vision_data = result.get("data") if isinstance(result, dict) else None
+        if result.get("success") and isinstance(vision_data, dict) and vision_data.get("title"):
             logger.info("视觉模型解析成功：%s", filename)
-            return result["data"], None
-        logger.warning("视觉模型不可用（%s），改用本地 OCR 兜底", result.get("error"))
+            return vision_data, None
+        logger.warning("视觉模型未返回完整 Matter（%s），改用本地 OCR 兜底",
+                       result.get("error") or "缺少 title / 数据结构不完整")
 
     extracted_text, ocr_err = _local_ocr(raw)
     if ocr_err:

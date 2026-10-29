@@ -50,8 +50,11 @@ def main():
           "max=%sMB formats=%s" % (d.get("max_mb"), d.get("formats")))
 
     r = upload("shot.png", PNG_1PX, "image/png")
-    check("合法 PNG 到达解析层（当前返回接入中提示）",
-          r.get("success") is False and "图片解析" in (r.get("error") or ""), "error=%s" % r.get("error"))
+    data = r.get("data") or {}
+    check("合法 PNG 返回完整 Matter 或明确错误",
+          (r.get("success") is True and bool(data.get("title")))
+          or (r.get("success") is False and bool(r.get("error"))),
+          "success=%s title=%s error=%s" % (r.get("success"), data.get("title"), r.get("error")))
 
     r = upload("shot.txt", b"hello", "text/plain")
     check("非法格式被拦截", r.get("success") is False and "仅支持" in (r.get("error") or ""), "error=%s" % r.get("error"))

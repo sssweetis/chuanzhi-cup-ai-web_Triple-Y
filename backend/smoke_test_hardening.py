@@ -122,7 +122,9 @@ def main():
     check("补充通知增量合并不误报删除",
           incremental["materials"]["only_left"] == []
           and "B score" in incremental["materials"]["common"]
-          and incremental["materials"]["only_right"] == ["C recommendation"],
+          and incremental["materials"]["only_right"] == ["C recommendation"]
+          and bool(incremental.get("changes"))
+          and bool(incremental.get("affected_todos")),
           str(incremental["materials"]))
     same_id = (same_cmp.get("data") or {}).get("comparison_id")
     if same_id:

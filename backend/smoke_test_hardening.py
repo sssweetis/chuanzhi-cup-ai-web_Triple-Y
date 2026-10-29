@@ -76,6 +76,14 @@ def main():
     _, _, bad_date = jcall("GET", "/api/tools/check-date?date=not-a-date")
     check("日期核对：错误格式被拦截", bad_date.get("success") is False and bool(bad_date.get("error")))
 
+    _, _, post_date = jcall("POST", "/api/tools/check-date", {
+        "deadline": "2026-11-08T18:00:00+08:00",
+    })
+    post_info = post_date.get("data") or {}
+    check("日期核对：兼容前端 POST deadline", post_date.get("success") is True
+          and bool(post_info.get("message")) and bool(post_info.get("recommended_date")),
+          "days_left=%s" % post_info.get("days_left"))
+
     session = "smoke-cmp-" + uuid.uuid4().hex[:6]
     left_text = "请于2026年11月2日17:00前提交报名表和成绩单。"
     right_text = "请于2026年11月3日18:00前提交报名表、成绩单和身份证复印件。"

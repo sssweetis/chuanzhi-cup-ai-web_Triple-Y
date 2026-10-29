@@ -64,7 +64,7 @@ from file_store import (FILE_MAX_BYTES, ALLOWED_EXTS, save_file as save_uploaded
 logger = logging.getLogger("main")
 from compare_store import (compare_matters, save_comparison, get_comparison,
                            list_comparisons, delete_comparison)  # noqa: E402
-from date_tool import check_date  # noqa: E402
+from date_tool import check_date, parse_date  # noqa: E402
 from export_tools import export_prepare_list_csv, export_prepare_list_markdown  # noqa: E402
 from rate_limit import limiter, is_rate_limit_enabled, limit_for_path  # noqa: E402
 
@@ -412,10 +412,39 @@ def get_prepare_list(matter_id: str, request: Request):
 
 # ==================== 10/30：日期核对 ====================
 
+def _date_tool_result(value: str):
+    info = check_date(value)
+    target = parse_date(value)
+    recommended = target - timedelta(days=1) if info["days_left"] > 0 else target
+    info["message"] = "%s，%s（%s）" % (info["date"], info["deadline_label"], info["weekday"])
+    info["suggestion"] = ("建议提前 1 天完成，避免最后一天临时处理"
+                          if info["days_left"] > 0 else "截止时间已到，请立即确认是否仍可办理")
+    info["recommended_date"] = recommended.isoformat()
+    return info
+
+
+class DateCheckRequest(BaseModel):
+    date: Optional[str] = None
+    deadline: Optional[str] = None
+
+
 @app.get("/api/tools/check-date", response_model=AnalyzeResponse)
 def tools_check_date(date: str):
     try:
-        info = check_date(date)
+        info = _date_tool_result(date)
+    except ValueError as e:
+        return _fail(str(e))
+    return {"success": True, "data": info, "error": None}
+
+
+@app.post("/api/tools/check-date", response_model=AnalyzeResponse)
+def tools_check_date_post(req: DateCheckRequest):
+    """兼容前端发送 {deadline: ISO时间} 的调用方式。"""
+    value = (req.date or req.deadline or "").strip()
+    if not value:
+        return _fail("请提供 date 或 deadline")
+    try:
+        info = _date_tool_result(value)
     except ValueError as e:
         return _fail(str(e))
     return {"success": True, "data": info, "error": None}

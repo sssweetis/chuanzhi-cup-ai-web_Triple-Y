@@ -20,7 +20,9 @@ REQUIRED = [
     "backend/.env.example", "backend/smoke_test_hardening.py", "frontend/package.json",
     "scripts/build_tech_pdf.ps1",
     "docs/技术文档.md", "docs/技术文档.html", "docs/技术文档.pdf", "docs/演示视频脚本.md",
-    "docs/部署说明.md", "docs/第三阶段测试用例.md",
+    "docs/部署说明.md", "docs/第三阶段测试用例.md", "docs/真实模型验收记录.md",
+    "scripts/online_acceptance.ps1", "scripts/deploy-vps.sh",
+    "docker-compose.prod.yml", "frontend/Dockerfile", "frontend/nginx.conf",
 ]
 LARGE_MB = 5
 

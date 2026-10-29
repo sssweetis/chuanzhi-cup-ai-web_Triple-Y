@@ -1,5 +1,5 @@
 import { state, setState } from '../state.js'
-import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate } from '../api.js'
+import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate, compareNotifications } from '../api.js'
 import { renderMatter } from './ModeCard.js'
 import { SAMPLES } from '../mockMatters.js'
 
@@ -20,6 +20,7 @@ export function renderInputPanel(mount) {
           <span class="date-pick">截止 <input type="date" id="taskDate"></span>
           <button class="tool" id="demoToggle" title="离线示例数据">示例</button>
           <button class="tool" id="quickDemo" style="background:var(--accent);color:#fff;border:none">⚡ 一键体验</button>
+        <button class="tool" id="compareBtn">🔄 补充通知对比</button>
         </div>
         <div class="in-bar-right">
           <span class="char-count" id="charCount">0 / 10000</span>
@@ -304,6 +305,23 @@ export function renderInputPanel(mount) {
     mount.querySelector('#taskInput').value = '请于10月25日18:00前提交奖学金报名表和成绩单，材料审核由王老师负责，审核通过后10月30日前缴费100元，11月1日打印准考证。'
     syncInput()
     runAnalyze()
+  }
+  mount.querySelector('#compareBtn').onclick = async () => {
+    const oldN = prompt('粘贴原通知：')
+    if (!oldN) return
+    const newN = prompt('粘贴补充通知：')
+    if (!newN) return
+    toast('对比中…')
+    try {
+      const res = await compareNotifications({ old_notification: oldN, new_notification: newN })
+      const zone = mount.querySelector('#resultZone')
+      const changes = (res.changes || []).map(c => `<div class="diff-change diff-${c.type || 'info'}">${c.text || ''}</div>`).join('')
+      const affected = (res.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')
+      zone.innerHTML = `<div class="matter-card"><h3>🔄 通知对比结果</h3>
+        <div style="margin:10px 0">${changes}</div>
+        ${affected ? `<div class="affected-box"><b>受影响待办：</b><ul>${affected}</ul></div>` : ''}
+      </div>`
+    } catch (err) { toast(err.message) }
   }
   mount.querySelector('#taskInput').value = localStorage.getItem('zhiban-input') || ''
   function syncInput() {

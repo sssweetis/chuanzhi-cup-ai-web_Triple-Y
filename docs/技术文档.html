@@ -29,8 +29,8 @@
 <h1>通知抽取助手 · 技术文档</h1>
 <blockquote>
 <p>队伍：Triple Y ｜ 比赛：传智杯 AI WEB 网页开发挑战赛
-版本：v1.1 ｜ 日期：2026-10-29</p>
-<p>说明：本文由 C 汇总；第 4.1 / 4.2 节由 A 编写；4.4 多模态由 A 与 C 共同实现；4.5 RAG 由 A 实现、C 完成接口接入。当前为省赛提交版；未配置团队 Key，演示按 Mock + 本地 OCR 运行，真实模型记录待 Key 到位后补充。</p>
+版本：v1.2 ｜ 日期：2026-10-29</p>
+<p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总；第 4.1 / 4.2 节由 A 编写；4.4 多模态由 A 与 C 共同实现；4.5 RAG 由 A 实现、C 完成接口接入。当前为省赛提交版；团队正式 Key 计划使用 DeepSeek，尚未配置，演示按 Mock + 本地 OCR 运行，真实模型记录待 Key 到位后补充。</p>
 </blockquote>
 <h2>目录</h2>
 <ol>
@@ -277,10 +277,14 @@ FastAPI 后端（8000）
 </table>
 <h3>4.1.2 文本模型：OpenAI 兼容接口 + 可替换供应商</h3>
 <p>文本抽取统一走 <strong>OpenAI 兼容的 Chat Completions 接口</strong>，通过环境变量配置：</p>
-<pre><code class="language-env">LLM_API_KEY=...
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o
+<pre><code class="language-env"># 团队正式 Key 计划使用 DeepSeek
+LLM_API_KEY=&lt;your-deepseek-key&gt;
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-chat
 </code></pre>
+<blockquote>
+<p>说明：开发阶段 A 曾用个人 OpenAI Key 做过接口联调，该 Key 没有提交到仓库，也不代表团队最终选型。团队正式 Key 到位后，文本模型按上面的 DeepSeek 配置重跑验收。</p>
+</blockquote>
 <p>这样做的理由：</p>
 <ol>
 <li><strong>不绑定单一供应商</strong>：DeepSeek、通义千问、Moonshot、智谱、字节豆包、硅基流动、Ollama、vLLM 等都可以通过改 <code>LLM_BASE_URL</code> / <code>LLM_MODEL</code> 接入，比赛现场哪家额度可用就用哪家。</li>
@@ -293,10 +297,15 @@ LLM_MODEL=gpt-4o
 <p>本项目的难点不是“模型知不知道什么是奖学金”，而是“能不能稳定输出指定结构、能不能不编造、能不能和代码规则配合”。微调需要标注数据、训练资源和持续维护，比赛周期内收益不稳定；本地 7B 级模型在中文长通知、JSON 稳定性、工具调用上还需要额外评测和调优。当前方案把“语义理解”交给通用模型，把“结构、判定、降级”交给代码，整体更可控，也方便随时更换供应商。</p>
 <h3>4.1.3 视觉模型：单独配置，本地 OCR 兜底</h3>
 <p>截图解析使用独立的视觉模型配置：</p>
-<pre><code class="language-env">TEAM_LLM_API_KEY=...
-TEAM_LLM_BASE_URL=https://api.openai.com/v1
-TEAM_LLM_MODEL=gpt-4o
+<pre><code class="language-env"># 视觉模型单独配置；不强制与文本模型同一供应商
+# 若团队 DeepSeek Key 未开通多模态，下面三项可留空，截图走本地 OCR
+TEAM_LLM_API_KEY=&lt;your-vision-key&gt;
+TEAM_LLM_BASE_URL=&lt;vision-base-url&gt;
+TEAM_LLM_MODEL=&lt;vision-model&gt;
 </code></pre>
+<blockquote>
+<p>团队正式 Key 预计用于 DeepSeek 文本模型；视觉模型是否复用同一 Key，需要确认该 Key 是否支持图片输入。未确认前，截图默认走本地 RapidOCR，不影响文字主流程。</p>
+</blockquote>
 <p>单独配置的原因：</p>
 <ul>
 <li>视觉模型和文本模型的供应商、价格、额度可能不同，拆开后可以分别替换；</li>
@@ -363,50 +372,51 @@ TEAM_LLM_MODEL=gpt-4o
 <ul>
 <li>Key 只从后端环境变量读取，前端不接触；<code>.env</code> 已被 <code>.gitignore</code> 忽略，仓库只提交 <code>.env.example</code>。</li>
 <li>没有 Key 且 <code>LLM_ENABLE_MOCK=1</code> 时，<code>/health</code> 返回 <code>mode=mock</code>：文本走离线 Mock，截图走本地 OCR，保证演示不白屏。</li>
-<li>配置 Key 后 <code>/health</code> 返回 <code>mode=real</code>，文本、视觉、RAG 走真实模型。</li>
+<li>配置团队 DeepSeek Key 后 <code>/health</code> 返回 <code>mode=real</code>，文本与 RAG 走真实模型；视觉模型已配置时截图走真实视觉模型，否则继续走本地 OCR。</li>
+<li>开发阶段的个人 OpenAI Key 只用于本机联调，没有提交到仓库，也不作为团队验收数据。</li>
 <li>真实模型接口失败时，后端返回统一错误信封，不会把异常堆栈或 Key 暴露给前端。</li>
 <li>真实模式默认按 IP + 路径限流（普通接口 60 次/分钟、上传 10 次/分钟），避免演示额度被刷爆。</li>
 </ul>
 <h3>4.1.6 当前验收状态（重要）</h3>
-<p>截至本版提交，<strong>团队尚未配置真实 Key</strong>，仓库内所有自动化测试与截图均为 <strong>Mock + 本地 OCR</strong> 结果。真实文本模型、视觉模型、Function Calling 的 token、耗时、费用记录尚未产生，不能把 Mock 数据当成真实模型效果。</p>
+<p>截至本版提交，<strong>团队正式 Key（计划 DeepSeek）尚未配置</strong>，仓库默认仍按 <strong>Mock + 本地 OCR</strong> 运行。开发阶段 A 曾用个人 OpenAI Key 做过本机接口联调，但该 Key 未提交到仓库，也没有形成团队验收数据；真实 DeepSeek 文本模型、视觉模型、Function Calling 的 token、耗时、费用记录尚未产生，不能把个人联调或 Mock 数据当成团队真实模型效果。</p>
 <table>
 <thead>
 <tr>
 <th>项目</th>
 <th>当前状态</th>
-<th>Key 到位后要补</th>
+<th>团队 DeepSeek Key 到位后要补</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>文本解析</td>
-<td>Mock 通过</td>
-<td>真实模型 3 个样本的耗时、token、费用</td>
+<td>个人 OpenAI Key 联调过；仓库默认 Mock</td>
+<td>用 DeepSeek 重跑 3 个样本，记录耗时、token、费用</td>
 </tr>
 <tr>
 <td>截图识别</td>
-<td>本地 OCR 通过</td>
-<td>真实视觉模型识别率与耗时</td>
+<td>本地 OCR 通过；视觉模型未配置</td>
+<td>确认 DeepSeek Key 是否支持图片输入；不支持则保持本地 OCR</td>
 </tr>
 <tr>
 <td>RAG 追问</td>
-<td>本地检索通过</td>
-<td>真实模型回答质量与出处准确率</td>
+<td>本地检索通过；个人 Key 联调过</td>
+<td>用 DeepSeek 重跑回答质量、出处准确率与耗时</td>
 </tr>
 <tr>
 <td>日期工具调用</td>
 <td>本地工具 + 假客户端协议通过</td>
-<td>真实模型 Function Calling 一次完整记录</td>
+<td>真实 DeepSeek Function Calling 一次完整记录</td>
 </tr>
 <tr>
 <td>补充通知对比</td>
-<td>规则差异通过</td>
-<td>真实模型语义对比差异与误判案例</td>
+<td>规则差异通过；个人 Key 联调过</td>
+<td>用 DeepSeek 对比语义差异、误判案例与费用</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>结论：<strong>当前按“无 Key / Mock 演示”提交</strong>。拿到团队 Key 后，按 <code>LLM_*</code> / <code>TEAM_LLM_*</code> 配置，重跑 <code>preflight.py</code> 并补充上表记录，再更新本节与 README。记录模板见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
+<p>结论：<strong>当前按“无团队 Key / Mock 演示”提交</strong>。团队 DeepSeek Key 到位后，按 <code>LLM_*</code>（文本）和 <code>TEAM_LLM_*</code>（视觉，可选）配置，重跑 <code>preflight.py</code> 并补充上表记录，再更新本节与 README。记录模板见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
 </blockquote>
 <h2>4.2 Prompt 设计</h2>
 <h3>4.2.1 Prompt 的组织方式</h3>
@@ -696,7 +706,7 @@ score &gt; 0.6 → complex
 </ol>
 <h2>8. 总结与展望</h2>
 <p><strong>已完成</strong>：文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试与一键自检；Docker 部署方案与演示素材。</p>
-<p><strong>局限</strong>：无团队 Key 时文本走 Mock、截图走本地 OCR，真实模型效果尚未在本仓库验收；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认。</p>
+<p><strong>局限</strong>：团队正式 Key（计划 DeepSeek）尚未配置，当前文本走 Mock、截图走本地 OCR；开发阶段 A 使用个人 OpenAI Key 做过联调，但不作为团队验收数据；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认。</p>
 <p><strong>展望</strong>：多文件合并解析、复杂条件分支（"若为应届生需额外提交…"）、向量检索与重排、日历/飞书同步、多人协作清单。</p>
 <hr />
 <h2>附录</h2>

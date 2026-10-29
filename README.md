@@ -8,7 +8,7 @@
 ![Status](https://img.shields.io/badge/Status-P1%20Complete-green.svg)
 ![Demo](https://img.shields.io/badge/Demo-Mock%20%2B%20Local%20OCR-orange.svg)
 
-> **当前提交版本说明**：仓库尚未配置团队 Key，默认 `LLM_ENABLE_MOCK=1`，文本解析走离线 Mock、截图走本地 OCR；真实模型接入代码已就绪，Key 到位后按 [`docs/真实模型验收记录.md`](docs/真实模型验收记录.md) 补 token / 耗时 / 费用记录。演示数据全部为虚构数据。
+> **当前提交版本说明**：团队正式 Key 计划使用 DeepSeek，尚未配置；仓库默认 `LLM_ENABLE_MOCK=1`，文本解析走离线 Mock、截图走本地 OCR。真实模型接入代码已就绪，Key 到位后按 [`docs/真实模型验收记录.md`](docs/真实模型验收记录.md) 补 token / 耗时 / 费用记录。演示数据全部为虚构数据。
 
 ---
 
@@ -284,14 +284,15 @@ npm run dev
 
 ```env
 LLM_ENABLE_MOCK=0
-LLM_API_KEY=sk-xxxxxxxx
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o
+LLM_API_KEY=<your-deepseek-key>
+# 团队正式 Key 计划使用 DeepSeek
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-chat
 
-# 截图视觉模型（可选，不配置则走本地 OCR）
-TEAM_LLM_API_KEY=sk-xxxxxxxx
-TEAM_LLM_BASE_URL=https://api.openai.com/v1
-TEAM_LLM_MODEL=gpt-4o
+# 截图视觉模型（可选；若 DeepSeek Key 不含图片输入，留空走本地 OCR）
+TEAM_LLM_API_KEY=<your-vision-key>
+TEAM_LLM_BASE_URL=<vision-base-url>
+TEAM_LLM_MODEL=<vision-model>
 ```
 
 重启后端，`/health` 返回 `mode=real`。Key 只放后端，禁止提交到仓库或写进前端。
@@ -390,7 +391,7 @@ TEAM_LLM_MODEL=gpt-4o
 
 ## 十二、项目局限性（答辩主动说明）
 
-1. **真实模型效果尚未在本仓库验收**：当前没有团队 Key，所有自动化测试和演示数据都是 Mock + 本地 OCR；真实文本模型、视觉模型、Function Calling 的准确率、耗时、token、费用还没有实测记录。不能把 Mock 结果当成真实模型效果。
+1. **真实模型效果尚未在本仓库验收**：团队正式 Key（计划 DeepSeek）尚未配置，所有自动化测试和演示数据都是 Mock + 本地 OCR；开发阶段 A 曾用个人 OpenAI Key 做本机联调，但不作为团队验收数据。真实 DeepSeek 文本模型、视觉模型、Function Calling 的准确率、耗时、token、费用还没有实测记录，不能把个人联调或 Mock 结果当成团队真实模型效果。
 2. **扫描版 PDF 和复杂版式能力有限**：只支持可复制文字的 PDF；扫描件需要改用截图通道；复杂表格、手写体、印章遮挡的识别精度取决于视觉模型或本地 OCR。
 3. **RAG 是词法检索，不是向量检索**：当前用中文二元组重叠、连续字串匹配和词频加权，能覆盖大部分“原文里明确写了”的问题，但对同义改写、跨段落归纳、长材料召回不如 embedding + rerank；检索不到时会拒答，可能漏掉本可回答的问题。
 4. **补充通知对比仍可能漏判**：采用“规则差异 + 可选 LLM 语义补充”，对同义改写、跨段落改期、连续多份补充通知的链路还不够稳；改期和删材料默认要求用户确认，避免误覆盖，但也增加了操作步骤。

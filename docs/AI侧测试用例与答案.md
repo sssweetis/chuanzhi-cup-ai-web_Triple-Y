@@ -81,7 +81,7 @@ suggestions 中包含“通知里没有明确截止时间，请手动补充后�
 ## 3. 复现命令
 
 ```powershell
-# A 侧：补充通知 + 日期工具 + 模式裁剪 + 检索 + Prompt 契约（86 项，不需要 Key）
+# A 侧：补充通知 + 日期工具 + 模式裁剪 + 检索 + Prompt 契约（88 项，不需要 Key）
 python src/test_compare_date.py
 
 # C 侧：后端接口（需要先启动后端）

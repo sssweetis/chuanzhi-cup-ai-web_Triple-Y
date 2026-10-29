@@ -15,6 +15,9 @@ from notification_extractor import (
     extract_pdf_pages_and_text,
     chunk_document_text,
     chunk_document_pages,
+    enforce_mode,
+    enforce_enabled_sections,
+    normalize_step_orders,
     TZ,
 )
 from prompt import (
@@ -38,6 +41,21 @@ def _get_extractor() -> MatterExtractor:
         _extractor = MatterExtractor(llm, SYSTEM_PROMPT)
         logger.info("MatterExtractor 初始化完成")
     return _extractor
+
+
+def _apply_mode_guards(data: dict) -> dict:
+    """在服务层补 warning/日期/来源后，再按 mode 做一次字段互斥裁剪。
+
+    MatterExtractor.process 内部已经裁剪过一次，但 service 后续会追加
+    warning_list、confirmation_needed 等字段；如果不再裁一次，simple 模式
+    会重新出现 warning_list 等禁止字段。
+    """
+    if not isinstance(data, dict):
+        return data
+    data = enforce_mode(data)
+    data = enforce_enabled_sections(data)
+    data = normalize_step_orders(data)
+    return data
 
 
 def _fix_todo_actions(data: dict):
@@ -274,6 +292,7 @@ def analyze_notification(notification_text: str) -> Dict[str, Any]:
         _fix_todo_actions(data)
         _fix_step_titles(data)
         _rebuild_missing_items(data)
+        data = _apply_mode_guards(data)
 
         return {"success": True, "data": data, "error": None}
     except Exception as e:
@@ -335,6 +354,7 @@ def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
         _fix_todo_actions(data)
         _fix_step_titles(data)
         _rebuild_missing_items(data)
+        data = _apply_mode_guards(data)
 
         data["confirmation_needed"] = confirmations
         return {"success": True, "data": data, "error": None, "source": "image"}
@@ -417,6 +437,7 @@ def analyze_notification_from_pdf(
         if not s.get("doc_version"):
             s["doc_version"] = doc_name
 
+    data = _apply_mode_guards(data)
     return {
         "success": True,
         "data": data,
@@ -507,6 +528,7 @@ def update_matter_status_with_ai(matter_data: dict, raw_text: str, user_action: 
 
         # 重建缺项清单
         _rebuild_missing_items(updated_data)
+        updated_data = _apply_mode_guards(updated_data)
 
         return {"success": True, "data": updated_data, "error": None}
 
@@ -1660,6 +1682,7 @@ def _apply_date_result(
             "source_ref": {"quote": deadline_source.get("quote", "")},
         })
     matter["warning_list"] = warnings
+    matter = _apply_mode_guards(matter)
 
     return {
         "success": True,

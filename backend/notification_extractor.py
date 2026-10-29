@@ -562,6 +562,24 @@ def enforce_enabled_sections(raw: Dict) -> Dict:
     raw["enabled_sections"] = MODE_ALLOWED_SECTIONS.get(raw.get("mode", "simple"), MODE_ALLOWED_SECTIONS["simple"])
     return raw
 
+
+def normalize_step_orders(data: Dict) -> Dict:
+    """把 step_list[].order 统一重排为 1..N，子步骤同理。
+
+    真实模型偶尔会返回 [1,1] / [1,1,1,1]，前端按 order 排序时会出现
+    顺序不稳定；这里不改变 step_id，只重排展示顺序。
+    """
+    if not isinstance(data, dict):
+        return data
+    for index, step in enumerate(data.get("step_list") or [], 1):
+        if not isinstance(step, dict):
+            continue
+        step["order"] = index
+        for sub_index, sub_step in enumerate(step.get("sub_step_list") or [], 1):
+            if isinstance(sub_step, dict):
+                sub_step["order"] = sub_index
+    return data
+
 FEATURE_WEIGHTS = {"has_deadline": 0.2, "has_multiple_reminders": 0.1, "has_multiple_steps": 0.2, "has_sub_steps": 0.1, "has_materials": 0.2, "has_review": 0.1, "has_dependencies": 0.1, "has_recurrence": 0.1}
 
 def recompute_complexity(features: List[str]) -> float:
@@ -750,6 +768,7 @@ class MatterExtractor:
 
         raw = enforce_mode(raw)
         raw = enforce_enabled_sections(raw)
+        raw = normalize_step_orders(raw)
 
         ok, err = validate_matter(raw)
         if not ok: 

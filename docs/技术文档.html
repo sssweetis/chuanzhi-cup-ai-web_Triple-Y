@@ -30,7 +30,7 @@
 <blockquote>
 <p>队伍：Triple Y ｜ 比赛：传智杯 AI WEB 网页开发挑战赛
 版本：v1.3 ｜ 日期：2026-10-29</p>
-<p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总。当前为省赛提交版；团队正式 Key 已配置，文本与视觉使用 DeepSeek Flash，首轮真实验收完成，token/费用待 DeepSeek 控制台账单补充。</p>
+<p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总。当前为省赛提交版；团队正式 Key 已配置，文本与视觉使用 DeepSeek Flash，首轮真实验收完成，DeepSeek 控制台累计 70 次请求 / 214,613 tokens / ¥0.61（2026-10-29）。</p>
 </blockquote>
 <h2>目录</h2>
 <ol>
@@ -545,8 +545,8 @@ TEAM_LLM_MODEL=deepseek-flash
 <tbody>
 <tr>
 <td>文本解析</td>
-<td>3 个样本通过；单条约 22–35s；01/02 为 complex，03 修复后为 standard</td>
-<td>token/费用按 DeepSeek 控制台账单补</td>
+<td>3 个样本通过；单条约 20–42s；01/02 为 complex，03 修复后为 standard</td>
+<td>平台累计 70 次 / 214,613 tokens / ¥0.61；单场景未分摊</td>
 </tr>
 <tr>
 <td>截图识别</td>
@@ -556,7 +556,7 @@ TEAM_LLM_MODEL=deepseek-flash
 <tr>
 <td>RAG 追问</td>
 <td>材料内回答附出处；材料外明确拒答</td>
-<td>真实 token/费用待控制台</td>
+<td>纳入平台累计</td>
 </tr>
 <tr>
 <td>日期工具调用</td>
@@ -571,7 +571,7 @@ TEAM_LLM_MODEL=deepseek-flash
 </tbody>
 </table>
 <blockquote>
-<p>结论：<strong>当前按真实 DeepSeek Flash 演示</strong>，不再标 Mock。token/费用以 DeepSeek 控制台账单为准；C 侧 compare 误报仍需修。完整记录见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
+<p>结论：<strong>当前按真实 DeepSeek Flash 演示</strong>，不再标 Mock。平台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 compare 误报仍需修。完整记录见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
 </blockquote>
 <h2>4.2 Prompt 设计</h2>
 <h3>4.2.1 Prompt 的组织方式</h3>
@@ -906,7 +906,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>生成耗时/费用</td>
 <td>真实模型首 token/总耗时/token 费用</td>
-<td>文本 22–35s、截图 9.6s、PDF 21.6s、工具 3.2s；token/费用待控制台</td>
+<td>文本 20–42s、截图 9.6s、PDF 21.6s、工具 3.2s；平台累计 214,613 tokens / ¥0.61</td>
 </tr>
 </tbody>
 </table>
@@ -1165,8 +1165,8 @@ score &gt; 0.6 → complex
 <td>全部通过（C 侧记录）</td>
 </tr>
 <tr>
-<td>A 侧 86 项确定性检查</td>
-<td>86/86</td>
+<td>A 侧 88 项确定性检查</td>
+<td>88/88</td>
 </tr>
 <tr>
 <td>Mock 性能（100 次）</td>
@@ -1174,7 +1174,7 @@ score &gt; 0.6 → complex
 </tr>
 <tr>
 <td>真实 DeepSeek Flash 文本</td>
-<td>3 个样本通过；单条约 22–35s</td>
+<td>3 个样本通过；单条约 20–42s</td>
 </tr>
 <tr>
 <td>真实视觉截图</td>
@@ -1190,7 +1190,7 @@ score &gt; 0.6 → complex
 </tr>
 <tr>
 <td>token / 费用</td>
-<td>待 DeepSeek 控制台账单补充</td>
+<td>70 次 / 214,613 tokens / ¥0.61（控制台累计）</td>
 </tr>
 </tbody>
 </table>
@@ -1237,7 +1237,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>确定性单元测试</td>
 <td>规则、模式、日期、对比、检索、Prompt 契约</td>
-<td><code>src/test_compare_date.py</code>（86 项，无 Key）</td>
+<td><code>src/test_compare_date.py</code>（88 项，无 Key）</td>
 </tr>
 <tr>
 <td>接口集成测试</td>
@@ -1257,7 +1257,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>真实模型评测</td>
 <td>字段准确率、引用准确率、耗时、费用</td>
-<td>⏳ 团队 DeepSeek Key 到位后补</td>
+<td>已首轮；字段级准确率待人工核对</td>
 </tr>
 </tbody>
 </table>
@@ -1323,13 +1323,13 @@ score &gt; 0.6 → complex
 </tr>
 <tr>
 <td><code>src/test_compare_date.py</code></td>
-<td>86</td>
+<td>88</td>
 <td>补充通知、日期、模式裁剪、检索、Prompt 契约（A 侧）</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>当前结果包含真实 DeepSeek Flash 首轮验收；token/费用以控制台账单为准，C 侧 compare 误报仍待修。</p>
+<p>当前结果包含真实 DeepSeek Flash 首轮验收；控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 compare 误报仍待修。</p>
 </blockquote>
 <h3>6.3 真实模型评测计划</h3>
 <table>
@@ -1344,7 +1344,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>文本解析</td>
 <td>3 个样本的字段准确率、耗时、prompt/completion tokens、费用</td>
-<td>3 个样本通过；22–35s；token/费用待控制台</td>
+<td>3 个样本通过；20–42s；平台累计 214,613 tokens / ¥0.61</td>
 </tr>
 <tr>
 <td>视觉识别</td>
@@ -1463,9 +1463,9 @@ score &gt; 0.6 → complex
 </table>
 <h2>8. 总结与展望</h2>
 <h3>8.1 已完成</h3>
-<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 86 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
+<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 88 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
 <h3>8.2 局限</h3>
-<p>团队 DeepSeek Flash 已完成首轮真实验收，但 token/费用仍待控制台账单补充；C 侧 <code>/api/compare</code> 仍把原材料误报为删除，需要改用 A 侧归一化对比；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
+<p>团队 DeepSeek Flash 已完成首轮真实验收，控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 <code>/api/compare</code> 仍把原材料误报为删除，需要改用 A 侧归一化对比；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
 <h3>8.3 社会价值与商业潜力</h3>
 <p><strong>社会价值</strong>：</p>
 <ul>
@@ -1552,7 +1552,7 @@ powershell -ExecutionPolicy Bypass -File ..\scripts\build_tech_pdf.ps1
 </tr>
 <tr>
 <td>A 侧 <code>src/test_compare_date.py</code></td>
-<td>86/86（补充通知/日期/模式/检索/Prompt 契约）</td>
+<td>88/88（补充通知/日期/模式/检索/Prompt 契约）</td>
 </tr>
 <tr>
 <td><code>smoke_test_acceptance.py</code></td>

@@ -472,6 +472,27 @@ def test_edge_cases():
           str(normalized.get("due_at", "")).startswith("2026-11-02T17:00"),
           str(normalized))
 
+    # E17：step_list[].order 重复时重排为 1..N
+    duplicated = {
+        "step_list": [
+            {"step_id": "step_1", "title": "A", "order": 1},
+            {"step_id": "step_2", "title": "B", "order": 1},
+            {"step_id": "step_3", "title": "C", "order": 1},
+        ]
+    }
+    reordered = ne.normalize_step_orders(duplicated)
+    check("E17 重复 order 重排为 1..N",
+          [s["order"] for s in reordered["step_list"]] == [1, 2, 3],
+          str([s["order"] for s in reordered["step_list"]]))
+
+    # E18：simple 模式二次裁剪后不允许 warning_list
+    guarded = service._apply_mode_guards({
+        "mode": "simple",
+        "title": "交表",
+        "warning_list": [{"warning_type": "missing_information"}],
+    })
+    check("E18 simple 模式不含 warning_list", "warning_list" not in guarded, str(guarded))
+
     # E06–E08：日期工具边界
     invalid = check_date("not-a-date")
     check("E06 非法日期返回失败", invalid.get("success") is False)

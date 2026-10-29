@@ -8,7 +8,7 @@
 ![Status](https://img.shields.io/badge/Status-P1%20Complete-green.svg)
 ![Demo](https://img.shields.io/badge/Demo-DeepSeek%20Flash%20Real-green.svg)
 
-> **当前提交版本说明**：团队 DeepSeek Key 已配置，文本与视觉使用 `deepseek-flash`，`/health` 为 `real`，`preflight.py` 13/13 通过。首轮真实文本/截图/PDF/RAG/Function Calling 已完成；token / 费用待 DeepSeek 控制台账单补充，记录见 [`docs/真实模型验收记录.md`](docs/真实模型验收记录.md)。演示数据全部为虚构数据。
+> **当前提交版本说明**：团队 DeepSeek Key 已配置，文本与视觉使用 `deepseek-flash`，`/health` 为 `real`，`preflight.py` 13/13 通过。首轮真实文本/截图/PDF/RAG/Function Calling 已完成；DeepSeek 控制台累计 70 次请求 / 214,613 tokens / ¥0.61，记录见 [`docs/真实模型验收记录.md`](docs/真实模型验收记录.md)。演示数据全部为虚构数据。
 
 ---
 
@@ -396,7 +396,7 @@ TEAM_LLM_MODEL=deepseek-flash
 
 > **功能冻结说明**：自 11/07 起不再新增功能，只修复阻断主流程的问题；以下为已知局限，答辩时主动说明。
 
-1. **真实模型已首轮验收，但仍有未落库数据**：团队 DeepSeek Flash 已完成文本 3 例、截图、PDF、RAG、Function Calling 的真实调用（`preflight.py` 13/13）；token / 费用仍需按 DeepSeek 控制台账单补充。C 侧 `/api/compare` 仍存在材料名误报，不能把这些未修项当成已完成。
+1. **真实模型已首轮验收，但仍有未落库数据**：团队 DeepSeek Flash 已完成文本 3 例、截图、PDF、RAG、Function Calling 的真实调用（`preflight.py` 13/13）；控制台累计 70 次请求 / 214,613 tokens / ¥0.61（单场景未分摊）。C 侧 `/api/compare` 仍存在材料名误报，不能把这些未修项当成已完成。
 2. **扫描版 PDF 和复杂版式能力有限**：只支持可复制文字的 PDF；扫描件需要改用截图通道；复杂表格、手写体、印章遮挡的识别精度取决于视觉模型或本地 OCR。
 3. **RAG 是词法检索，不是向量检索**：当前用中文二元组重叠、连续字串匹配和词频加权，能覆盖大部分“原文里明确写了”的问题，但对同义改写、跨段落归纳、长材料召回不如 embedding + rerank；检索不到时会拒答，可能漏掉本可回答的问题。
 4. **补充通知对比仍可能漏判**：采用“规则差异 + 可选 LLM 语义补充”，对同义改写、跨段落改期、连续多份补充通知的链路还不够稳；改期和删材料默认要求用户确认，避免误覆盖，但也增加了操作步骤。
@@ -443,7 +443,8 @@ TEAM_LLM_MODEL=deepseek-flash
   - [x] AI 侧 15 个测试用例与标准答案
   - [x] 6 分 30 秒视频讲稿与三个演示案例
   - [x] 真实 Key 验收（DeepSeek Flash，preflight 13/13）
-  - [ ] token / 费用台账 + C 侧 compare 误报修复
+  - [x] token / 费用台账（累计 70 次 / 214,613 tokens / ¥0.61）
+  - [ ] C 侧 compare 误报修复
   - [ ] 演示视频录制与剪辑
   - [ ] 在线演示部署（可选加分）
   - [x] 最终测试表、复现步骤与已知问题清单

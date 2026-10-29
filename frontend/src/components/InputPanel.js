@@ -1,5 +1,5 @@
 import { state, setState } from '../state.js'
-import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate, compareNotifications } from '../api.js'
+import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate, compareNotifications, savePrepareList } from '../api.js'
 import { renderMatter } from './ModeCard.js'
 import { SAMPLES } from '../mockMatters.js'
 
@@ -112,7 +112,14 @@ export function renderInputPanel(mount) {
       return
     }
     if (e.target.closest('#confirmUpdateBtn')) {
-      toast('已确认，任务清单将按新通知更新')
+      const m = state.analyzeResult
+      if (m && m.matter_id) {
+        savePrepareList({ matter_id: m.matter_id, todo_list: state.tasks.filter(t => t.generated).map(t => ({ action: t.title, status: t.done ? 'completed' : 'not_started' })) })
+          .then(() => toast('已保存到任务清单'))
+          .catch(err => toast(err.message))
+      } else {
+        toast('已确认，任务清单将按新通知更新')
+      }
     }
   })
 

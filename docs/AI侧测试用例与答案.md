@@ -94,9 +94,8 @@ python preflight.py
 
 | 用例 | 缺少条件 |
 | --- | --- |
-| 真实 token / 费用 | 按 DeepSeek 控制台账单导出 |
+| 单场景 token / 费用分摊 | 目前只有 DeepSeek 控制台累计（70 次 / 214,613 tokens / ¥0.61） |
 | 模糊截图 `confirmation_needed` | 需要一张真实模糊/遮挡截图 |
-| C 侧 `/api/compare` 材料归一化 | C 改用 A 的对比或做名称归一化 |
 | 手机 / 另一台电脑布局 | B 或实际设备 |
 | 线上三案例复现 | C 部署公网地址 |
 | 演示视频成片 | 全队录屏与剪辑 |

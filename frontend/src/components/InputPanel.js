@@ -1,5 +1,5 @@
 import { state, setState } from '../state.js'
-import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion } from '../api.js'
+import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate } from '../api.js'
 import { renderMatter } from './ModeCard.js'
 import { SAMPLES } from '../mockMatters.js'
 
@@ -165,6 +165,19 @@ export function renderInputPanel(mount) {
         state.resultFromImage = false
       }
       setState({ analyzing: false, analyzeResult: data })
+      // 日期核对工具
+      if (data && data.deadline && data.deadline.due_at) {
+        checkDate({ deadline: data.deadline.due_at }).then(cr => {
+          if (!cr) return
+          const el = document.getElementById('dateCheckTip')
+          if (el) el.remove()
+          const tip = document.createElement('div')
+          tip.id = 'dateCheckTip'
+          tip.style.cssText = 'background:#eef5ff;color:#3a6bb5;padding:8px 12px;border-radius:8px;font-size:12.5px;margin-top:8px'
+          tip.textContent = '📅 ' + (cr.message || cr.suggestion || `建议完成时间：${cr.recommended_date || ''}`)
+          zone.appendChild(tip)
+        }).catch(() => {})
+      }
       // 图片识别有需要确认的内容 → 弹窗
       if (Array.isArray(data.confirmation_needed) && data.confirmation_needed.length) {
         let m = document.getElementById('confirmMask')

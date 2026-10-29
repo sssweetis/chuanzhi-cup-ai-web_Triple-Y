@@ -143,4 +143,26 @@ export async function askQuestion(payload) {
   return p.data
 }
 
+// POST /api/compare  {old_notification, new_notification} → diff/affected_todos
+export async function compareNotifications(payload) {
+  const res = await fetch(BASE_URL + '/api/compare', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
+    body: JSON.stringify(payload)
+  })
+  const p = await res.json()
+  if (!p.success) throw new Error(p.error || '对比失败')
+  return p.data
+}
+
+// POST /api/tools/check-date  {deadline} → 剩余天数/节假日/建议
+export async function checkDate(payload) {
+  const res = await fetch(BASE_URL + '/api/tools/check-date', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
+    body: JSON.stringify(payload)
+  })
+  const p = await res.json()
+  if (!p.success) throw new Error(p.error || '日期核对失败')
+  return p.data
+}
+
 export const apiBaseUrl = BASE_URL

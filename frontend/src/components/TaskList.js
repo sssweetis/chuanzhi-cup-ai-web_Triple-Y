@@ -224,18 +224,9 @@ export function renderTaskList(mount) {
     setState({})
   }
 
-  // 下载清单 CSV
-  mount.querySelector('#downloadList').onclick = () => {
-    const rows = [['任务', '截止日期', '状态', '备注']]
-    state.tasks.forEach(t => {
-      rows.push([t.title, t.date, t.done ? '已完成' : '进行中', t.note || ''])
-    })
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `任务清单_${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+  // 下载清单 CSV（服务端导出）
+  mount.querySelector('#downloadList').onclick = async () => {
+    try { await (await import('../api.js')).exportTasks() }
+    catch (e) { alert(e.message) }
   }
 }

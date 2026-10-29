@@ -166,3 +166,14 @@ export async function checkDate(payload) {
 }
 
 export const apiBaseUrl = BASE_URL
+
+// GET /api/export 下载 CSV
+export async function exportTasks() {
+  const res = await fetch(BASE_URL + '/api/export', { headers: { 'X-Session-Id': SESSION_ID } })
+  if (!res.ok) throw new Error('导出失败')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'tasks.csv'; a.click()
+  URL.revokeObjectURL(url)
+}

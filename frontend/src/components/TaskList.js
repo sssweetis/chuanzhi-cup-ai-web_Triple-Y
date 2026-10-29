@@ -1,4 +1,5 @@
 import { state, setState, daysLeft } from '../state.js'
+import { escapeHtml } from '../util.js'
 
 // 展开态存在模块变量里（不持久化也行，刷新收起即可）
 const expanded = new Set()
@@ -61,7 +62,7 @@ export function renderTaskList(mount) {
     <div class="task-row ${t.done ? 'done-row' : ''} ${state.focusDate === t.date ? 'focus-row' : ''}">
       <div class="task-main">
         <span class="task-arrow ${open ? 'open' : ''}">▸</span>
-        <span class="task-title" data-expand="${t.id}" title="点击展开">${t.title}</span>
+        <span class="task-title" data-expand="${t.id}" title="点击展开">${escapeHtml(t.title)}</span>
         <button class="task-edit" data-edit="${t.id}" title="改名">✏️</button>
         <span class="task-date">${t.done ? '' : t.date}</span>
         <span class="task-left">${t.done ? `<span class="done-at">完成于 ${t.doneAt || ''}</span>` : leftTag(t)}</span>

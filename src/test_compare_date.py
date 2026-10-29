@@ -11,17 +11,21 @@
     python src/test_compare_date.py
 """
 
+import copy
 import json
 import os
 import sys
 from types import SimpleNamespace
 
+import notification_extractor as ne
 import service
 from service import (
     apply_notice_changes,
     check_date,
     compare_notifications,
     run_date_check_tool_loop,
+    search_relevant_chunks,
+    split_into_chunks,
     update_from_supplement,
 )
 
@@ -313,6 +317,197 @@ def test_llm_tool_loop_with_fake_client():
           str(result["data"].get("suggestions")))
 
 
+def test_edge_cases():
+    """补充通知、日期工具、模式裁剪、检索与 Prompt 契约的边界用例。"""
+    print("\n" + "=" * 70)
+    print("【边界用例】防止误删材料 / 冲突判断 / 模式裁剪 / 检索")
+    print("=" * 70)
+    original, _ = pair1_matters()
+
+    # E01：补充通知只改截止时间，没有重复列材料/步骤 → 不能误删
+    supplement = {
+        "deadline": {"due_at": "2026-11-08T18:00:00+08:00"},
+        "materials": [],
+        "step_list": [],
+        "todo_list": [],
+    }
+    compared = compare_notifications(
+        "原通知：11月10日18:00前提交报名表。",
+        "补充通知：截止时间调整为11月8日18:00。",
+        original_matter=original,
+        supplement_matter=supplement,
+        use_llm=False,
+    )
+    diff = compared["data"]["diff"]
+    check("E01 补充通知没重列材料时不误删", diff["removed_materials"] == [],
+          str(diff["removed_materials"]))
+    check("E01 待办预览仍保留原 4 条", len(diff["preview_todo_list"]) == 4,
+          str(len(diff["preview_todo_list"])))
+    applied = apply_notice_changes(original, diff, confirmed=True)
+    check("E01 应用后材料仍为 3 项", len(applied["data"]["matter"]["materials"]) == 3,
+          str(len(applied["data"]["matter"]["materials"])))
+
+    # E02：补充通知没提截止时间 → 保留原截止时间
+    supplement = {
+        "materials": original["materials"],
+        "step_list": original["step_list"],
+        "todo_list": [],
+    }
+    compared = compare_notifications(
+        "原通知：11月10日18:00前提交。",
+        "补充通知：请补充填写学院推荐表。",
+        original_matter=original,
+        supplement_matter=supplement,
+        use_llm=False,
+    )
+    diff = compared["data"]["diff"]
+    applied = apply_notice_changes(original, diff, confirmed=True)
+    check("E02 没提截止时间时保留原截止",
+          applied["data"]["matter"]["deadline"]["due_at"].startswith("2026-11-10"),
+          applied["data"]["matter"]["deadline"].get("due_at"))
+
+    # E03：明确写“不再要求” → 直接删材料，不额外弹确认
+    supplement = {
+        "deadline": original["deadline"],
+        "materials": [m for m in original["materials"] if m["material_name"] != "成绩单"],
+        "step_list": original["step_list"],
+        "todo_list": [],
+    }
+    compared = compare_notifications(
+        "原通知：提交报名表、成绩单。",
+        "补充通知：不再要求提交成绩单。",
+        original_matter=original,
+        supplement_matter=supplement,
+        use_llm=False,
+    )
+    diff = compared["data"]["diff"]
+    check("E03 明确取消材料 → 不额外确认", diff["requires_confirmation"] is False,
+          str(diff["confirmation_needed"]))
+    check("E03 预览里已去掉成绩单待办",
+          all("成绩单" not in (t.get("action") or "") for t in diff["preview_todo_list"]))
+    applied = apply_notice_changes(original, diff, confirmed=True)
+    check("E03 应用后成绩单材料被删除",
+          all(m["material_name"] != "成绩单" for m in applied["data"]["matter"]["materials"]),
+          str([m["material_name"] for m in applied["data"]["matter"]["materials"]]))
+
+    # E04：材料名带书名号/附件号 → 归一化后不误判为新增/删除
+    supplement = copy.deepcopy(original)
+    supplement["materials"] = [
+        {"material_id": "mat_1", "material_name": "《奖学金申请表》（附件1）", "material_type": "required"},
+        {"material_id": "mat_2", "material_name": "成绩单", "material_type": "required"},
+        {"material_id": "mat_3", "material_name": "身份证复印件", "material_type": "required"},
+    ]
+    compared = compare_notifications(
+        "原通知", "补充通知",
+        original_matter=original, supplement_matter=supplement, use_llm=False,
+    )
+    diff = compared["data"]["diff"]
+    check("E04 名称格式差异不误判新增", diff["added_materials"] == [],
+          str([m["material_name"] for m in diff["added_materials"]]))
+    check("E04 名称格式差异不误判删除", diff["removed_materials"] == [],
+          str([m["material_name"] for m in diff["removed_materials"]]))
+
+    # E05：同名材料重复出现也不崩溃
+    duplicate = {
+        "deadline": {"due_at": "2026-11-08T18:00:00+08:00"},
+        "materials": [
+            {"material_id": "mat_a", "material_name": "报名表"},
+            {"material_id": "mat_b", "material_name": "报名表"},
+        ],
+        "step_list": [],
+        "todo_list": [],
+    }
+    compared = compare_notifications(
+        "原通知", "补充通知",
+        original_matter=duplicate, supplement_matter=duplicate, use_llm=False,
+    )
+    check("E05 同名材料重复也不崩溃", compared.get("success") is True,
+          str(compared.get("error")))
+
+    # E06–E08：日期工具边界
+    invalid = check_date("not-a-date")
+    check("E06 非法日期返回失败", invalid.get("success") is False)
+    expired = check_date("2026-10-30T18:00:00+08:00", now=NOW)
+    check("E07 过期风险为 high", expired.get("risk_level") == "high",
+          str(expired.get("risk_level")))
+    check("E07 过期建议提示补交", "补交" in expired.get("suggestion", ""),
+          expired.get("suggestion"))
+    no_due = copy.deepcopy(original)
+    no_due.pop("deadline", None)
+    skipped = run_date_check_tool_loop(no_due, now=NOW, use_llm=False)
+    check("E08 无截止时间不调用工具", skipped.get("mode") == "skipped",
+          str(skipped.get("mode")))
+    check("E08 无截止时间给出补充提示",
+          any("截止时间" in s for s in skipped["data"].get("suggestions") or []))
+
+    # E09：simple 模式必须裁掉材料/步骤/待办
+    simple = {
+        "schema_version": "1.0", "id": "m1", "mode": "simple", "title": "交表",
+        "status": "not_started",
+        "materials": [{"material_id": "mat_1", "material_name": "报名表"}],
+        "step_list": [{"step_id": "step_1", "title": "交表", "dependencies": ["step_2"]}],
+        "todo_list": [{"todo_id": "todo_1", "action": "准备报名表"}],
+    }
+    clipped = ne.enforce_mode(copy.deepcopy(simple))
+    clipped = ne.enforce_enabled_sections(clipped)
+    check("E09 simple 裁掉 materials", "materials" not in clipped)
+    check("E09 simple 裁掉 step_list", "step_list" not in clipped)
+    check("E09 simple 裁掉 todo_list", "todo_list" not in clipped)
+    check("E09 simple 区块正确",
+          clipped.get("enabled_sections") == ["summary", "schedule", "source"],
+          str(clipped.get("enabled_sections")))
+
+    # E10：standard 保留材料/步骤，但裁掉依赖与治理字段
+    standard = {
+        "schema_version": "1.0", "id": "m2", "mode": "standard", "title": "报名",
+        "status": "not_started",
+        "materials": [{"material_id": "mat_1", "material_name": "报名表"}],
+        "step_list": [{"step_id": "step_1", "title": "交表", "dependencies": ["step_2"]}],
+        "audit_log": [{"action": "x"}],
+        "warning_list": [
+            {"warning_type": "deadline_risk", "message": "时间紧"},
+            {"warning_type": "permission", "message": "无权限"},
+        ],
+    }
+    clipped = ne.enforce_mode(copy.deepcopy(standard))
+    clipped = ne.enforce_enabled_sections(clipped)
+    check("E10 standard 保留 materials", "materials" in clipped)
+    check("E10 standard 裁掉 dependencies",
+          all("dependencies" not in s for s in clipped.get("step_list") or []))
+    check("E10 standard 裁掉 audit_log", "audit_log" not in clipped)
+    check("E10 standard 只保留两类预警",
+          [w["warning_type"] for w in clipped.get("warning_list") or []] == ["deadline_risk"],
+          str(clipped.get("warning_list")))
+
+    # E11：复杂度公式与模式判定
+    check("E11 公式重算 0.2", ne.recompute_complexity(["has_deadline"]) == 0.2)
+    check("E11 0.2 → simple", ne.decide_mode(["has_deadline"], 0.2) == "simple")
+    check("E11 0.4 → standard",
+          ne.decide_mode(["has_deadline", "has_materials"], 0.4) == "standard")
+    check("E11 has_review → complex", ne.decide_mode(["has_review"], 0.1) == "complex")
+
+    # E12：分段编号与检索
+    chunks = split_into_chunks("请提交报名表。演示视频不超过3分钟。", "视频要求.md", "doc_video")
+    check("E12 分段生成唯一编号", len({c["chunk_id"] for c in chunks}) == len(chunks),
+          str([c["chunk_id"] for c in chunks]))
+    hits = search_relevant_chunks(
+        "视频有什么要求",
+        [
+            {"text": "演示视频不超过3分钟，MP4 格式。", "doc_name": "视频要求.md", "doc_id": "doc_1"},
+            {"text": "报名表交至行政楼302。", "doc_name": "报名要求.md", "doc_id": "doc_2"},
+        ],
+        top_k=2,
+    )
+    check("E12 检索命中视频材料", bool(hits) and "视频" in hits[0]["content"],
+          str(hits[:1]))
+
+    # E13：Prompt 契约静态检查（防止后续改 Prompt 时丢关键约束）
+    with open(os.path.join(HERE, "prompt.py"), encoding="utf-8") as f:
+        prompt_text = f.read()
+    for token in ("source_ref", "未找到依据", "check_date", "以此为准", "confirmation_needed"):
+        check("E13 Prompt 保留约束：%s" % token, token in prompt_text)
+
+
 def main():
     print("=" * 70)
     print("A 侧 10.29–10.31 验收（无需 API Key）")
@@ -321,6 +516,7 @@ def main():
     test_pair2()
     test_date_tool()
     test_llm_tool_loop_with_fake_client()
+    test_edge_cases()
 
     print("\n" + "=" * 70)
     print("结果：%d 通过，%d 失败" % (len(PASS), len(FAIL)))

@@ -46,6 +46,12 @@ export function renderTaskList(mount) {
 
   const body = mount.querySelector('#taskListBody')
   mount.querySelector('#emptyTip').style.display = list.length ? 'none' : 'block'
+  const emptyMsgs = {
+    doing: '🎉 暂无进行中的任务，把上面的通知粘进来试试',
+    done: '最近 3 天完成的任务会显示在这里',
+    history: '完成超过 3 天的任务会自动归入历史清单'
+  }
+  mount.querySelector('#emptyTip').textContent = emptyMsgs[state.activeTab] || '暂无任务'
 
   body.innerHTML = list.map(t => {
     const open = expanded.has(t.id)

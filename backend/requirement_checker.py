@@ -90,6 +90,7 @@ def _material_view(m: Dict[str, Any]) -> Dict[str, Any]:
         "material_id": m.get("material_id"),
         "material_name": m.get("material_name") or m.get("name") or "未命名材料",
         "material_type": (m.get("material_type") or "unspecified"),
+        "condition": m.get("condition"),
         "required_by_source": bool(m.get("required_by_source")),
     }
 
@@ -98,6 +99,41 @@ def _is_required(m: Dict[str, Any]) -> bool:
     if m.get("required_by_source"):
         return True
     return str(m.get("material_type") or "").strip().lower() == "required"
+
+
+def _grade_level(profile: Optional[Dict[str, Any]]) -> Optional[int]:
+    """把 profile 里的年级转成 1=大一、2=大二、3=大三、4=大四、5=研究生。"""
+    profile = profile or {}
+    for key in ("grade", "grade_level", "student_type", "year"):
+        value = str(profile.get(key) or "").strip().lower()
+        if not value:
+            continue
+        if "大一" in value or "freshman" in value or value in ("1", "一"):
+            return 1
+        if "大二" in value or "sophomore" in value or value in ("2", "二"):
+            return 2
+        if "大三" in value or "junior" in value or value in ("3", "三"):
+            return 3
+        if "大四" in value or "senior" in value or value in ("4", "四"):
+            return 4
+        if "研究生" in value or "硕士" in value or "博士" in value or "graduate" in value:
+            return 5
+    return None
+
+
+def _condition_status(condition: Any, profile: Optional[Dict[str, Any]]) -> Optional[bool]:
+    """返回 True=适用、False=不适用、None=无法判断（需要确认年级）。"""
+    text = _norm(condition)
+    if not text:
+        return True
+    level = _grade_level(profile)
+    if level is None:
+        return None
+    if "大一" in text or "新生" in text:
+        return level == 1
+    if "大二" in text or "及以上" in text:
+        return level >= 2
+    return None
 
 
 def build_corpus(matter: Dict[str, Any], notice_text: str = "") -> str:
@@ -157,6 +193,15 @@ def check_requirements(
     for m in materials:
         view = _material_view(m)
         is_checked = (str(view["material_id"]) in checked_raw) or (str(view["material_name"]) in checked_raw)
+        condition_status = _condition_status(view.get("condition"), profile)
+        if condition_status is False:
+            continue
+        if condition_status is None and not is_checked:
+            need_confirm.append({
+                "item": "材料「%s」的适用条件" % view["material_name"],
+                "reason": "请先确认年级（大一 / 大二及以上），再判断这项材料是否需要提交",
+            })
+            continue
         if is_checked:
             checked.append(view)
         elif _is_required(m):

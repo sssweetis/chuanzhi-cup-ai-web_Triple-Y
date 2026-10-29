@@ -269,12 +269,14 @@ class Material:
     material_name: str
     material_type: str = "required"
     status: str = "pending"
+    condition: Optional[str] = None
     template_attachment_id: Optional[str] = None
     source_ref: Optional[SourceRef] = None
     is_suggestion: bool = False
 
     def to_dict(self) -> Dict:
         result = {"material_id": self.material_id, "material_name": self.material_name, "material_type": self.material_type, "status": self.status}
+        if self.condition: result["condition"] = self.condition
         if self.template_attachment_id: result["template_attachment_id"] = self.template_attachment_id
         if self.source_ref: result["source_ref"] = self.source_ref.to_dict()
         if self.is_suggestion: result["is_suggestion"] = True
@@ -292,6 +294,7 @@ class Material:
             material_name=m_name if m_name else "未命名材料",
             material_type=_safe_str(d.get("material_type"), "required"),
             status=_safe_str(d.get("status"), "pending"),
+            condition=_safe_str(d.get("condition")) or None,
             template_attachment_id=d.get("template_attachment_id"),
             source_ref=SourceRef.from_dict(src) if src else None,
             is_suggestion=bool(d.get("is_suggestion", False))
@@ -580,6 +583,81 @@ def normalize_step_orders(data: Dict) -> Dict:
                 sub_step["order"] = sub_index
     return data
 
+
+OPTIONAL_HINTS = ("选填", "可选", "如有", "非必须", "自愿", "不是必填", "无需必须")
+FINAL_ACTION_HINTS = ("线上报名", "完成报名", "提交报名", "完成提交")
+
+
+def _material_quote(material: Dict) -> str:
+    source = material.get("source_ref") or {}
+    return str(source.get("quote") or "") if isinstance(source, dict) else ""
+
+
+def _infer_condition(material: Dict) -> Optional[str]:
+    """从材料名/原文推出适用人群；无法判断时返回 None。"""
+    text = "%s %s" % (material.get("material_name") or "", _material_quote(material))
+    if "大一" in text or "新生" in text:
+        if "大二" not in text and "及以上" not in text:
+            return "大一新生"
+    if "大二" in text or "及以上" in text:
+        return "大二及以上"
+    return None
+
+
+def normalize_material_metadata(data: Dict) -> Dict:
+    """统一材料类型与适用条件，避免“选填”被当成必交、条件材料同时必交。"""
+    if not isinstance(data, dict):
+        return data
+    for material in data.get("materials") or []:
+        if not isinstance(material, dict):
+            continue
+        text = "%s %s" % (material.get("material_name") or "", _material_quote(material))
+        if any(hint in text for hint in OPTIONAL_HINTS):
+            material["material_type"] = "optional"
+        condition = material.get("condition") or _infer_condition(material)
+        if condition:
+            material["condition"] = condition
+    return data
+
+
+def normalize_final_step_order(data: Dict) -> Dict:
+    """把“线上报名/完成报名”类最终动作移到最后，并依赖所有前置步骤。"""
+    if not isinstance(data, dict):
+        return data
+    steps = [s for s in (data.get("step_list") or []) if isinstance(s, dict)]
+    finals = [s for s in steps if any(hint in str(s.get("title") or "") for hint in FINAL_ACTION_HINTS)]
+    if len(steps) < 2 or not finals:
+        return data
+    final_ids = {id(s) for s in finals}
+    others = [s for s in steps if id(s) not in final_ids]
+    other_ids = [s.get("step_id") for s in others if s.get("step_id")]
+    for final_step in finals:
+        deps = [d for d in (final_step.get("dependencies") or []) if isinstance(d, (dict, str))]
+        existing = {
+            (d.get("step_id") if isinstance(d, dict) else d)
+            for d in deps
+        }
+        for step_id in other_ids:
+            if step_id not in existing:
+                deps.append({"type": "finish_to_start", "step_id": step_id})
+        if deps:
+            final_step["dependencies"] = deps
+    data["step_list"] = others + finals
+    return normalize_step_orders(data)
+
+
+def normalize_todo_order(data: Dict) -> Dict:
+    """把“完成线上报名”类最终待办移到最后，避免用户先报名后准备。"""
+    if not isinstance(data, dict):
+        return data
+    todos = [t for t in (data.get("todo_list") or []) if isinstance(t, dict)]
+    finals = [t for t in todos if any(hint in str(t.get("action") or "") for hint in FINAL_ACTION_HINTS)]
+    if len(todos) < 2 or not finals:
+        return data
+    final_ids = {id(t) for t in finals}
+    data["todo_list"] = [t for t in todos if id(t) not in final_ids] + finals
+    return data
+
 FEATURE_WEIGHTS = {"has_deadline": 0.2, "has_multiple_reminders": 0.1, "has_multiple_steps": 0.2, "has_sub_steps": 0.1, "has_materials": 0.2, "has_review": 0.1, "has_dependencies": 0.1, "has_recurrence": 0.1}
 
 def recompute_complexity(features: List[str]) -> float:
@@ -768,6 +846,9 @@ class MatterExtractor:
 
         raw = enforce_mode(raw)
         raw = enforce_enabled_sections(raw)
+        raw = normalize_material_metadata(raw)
+        raw = normalize_final_step_order(raw)
+        raw = normalize_todo_order(raw)
         raw = normalize_step_orders(raw)
 
         ok, err = validate_matter(raw)

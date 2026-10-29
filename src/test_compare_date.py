@@ -493,6 +493,60 @@ def test_edge_cases():
     })
     check("E18 simple 模式不含 warning_list", "warning_list" not in guarded, str(guarded))
 
+    # E19：选填/条件材料元数据
+    material_data = {
+        "materials": [
+            {"material_id": "m1", "material_name": "项目申报书", "material_type": "required",
+             "source_ref": {"quote": "项目申报书（需指导老师签字，一式三份）"}},
+            {"material_id": "m2", "material_name": "高考成绩单", "material_type": "required",
+             "source_ref": {"quote": "大一新生需额外提交高考成绩单"}},
+            {"material_id": "m3", "material_name": "上一学年成绩单", "material_type": "required",
+             "source_ref": {"quote": "大二及以上学生需提供上一学年成绩单"}},
+            {"material_id": "m4", "material_name": "获奖证书", "material_type": "required",
+             "source_ref": {"quote": "若有省级以上获奖证书，请一并扫描上传（选填）"}},
+        ]
+    }
+    ne.normalize_material_metadata(material_data)
+    mats = {m["material_name"]: m for m in material_data["materials"]}
+    check("E19 选填证书自动标 optional", mats["获奖证书"]["material_type"] == "optional",
+          mats["获奖证书"]["material_type"])
+    check("E19 高考成绩单带大一条件", mats["高考成绩单"].get("condition") == "大一新生",
+          str(mats["高考成绩单"].get("condition")))
+    check("E19 上一学年成绩单带大二及以上条件",
+          mats["上一学年成绩单"].get("condition") == "大二及以上",
+          str(mats["上一学年成绩单"].get("condition")))
+
+    # E20：最终报名步骤必须最后，且依赖前置步骤
+    step_data = {
+        "step_list": [
+            {"step_id": "s1", "title": "完成线上报名", "order": 1},
+            {"step_id": "s2", "title": "准备申报材料", "order": 2},
+            {"step_id": "s3", "title": "提交电子初审", "order": 3},
+        ]
+    }
+    ne.normalize_final_step_order(step_data)
+    titles = [s["title"] for s in step_data["step_list"]]
+    check("E20 最终报名步骤移到最后", titles[-1] == "完成线上报名", str(titles))
+    final_step = step_data["step_list"][-1]
+    dep_ids = {(d.get("step_id") if isinstance(d, dict) else d) for d in final_step.get("dependencies") or []}
+    check("E20 最终步骤依赖准备与初审", {"s2", "s3"}.issubset(dep_ids), str(dep_ids))
+    check("E20 step order 重排为 1..N",
+          [s["order"] for s in step_data["step_list"]] == [1, 2, 3],
+          str([s["order"] for s in step_data["step_list"]]))
+
+    # E21：最终报名待办移到最后
+    todo_data = {
+        "todo_list": [
+            {"todo_id": "t1", "action": "完成线上报名"},
+            {"todo_id": "t2", "action": "准备申报材料"},
+            {"todo_id": "t3", "action": "提交电子初审"},
+        ]
+    }
+    ne.normalize_todo_order(todo_data)
+    check("E21 最终报名待办移到最后",
+          todo_data["todo_list"][-1]["action"] == "完成线上报名",
+          str([t["action"] for t in todo_data["todo_list"]]))
+
     # E06–E08：日期工具边界
     invalid = check_date("not-a-date")
     check("E06 非法日期返回失败", invalid.get("success") is False)

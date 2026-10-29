@@ -22,6 +22,9 @@ export function renderCheckForm(mount) {
       <div class="list-title">我们队的情况</div>
       <div class="sub">勾选已具备的材料，系统分成"已准备 / 缺少 / 需要确认"</div>
       <div class="field"><label>团队人数</label><input type="number" id="fPeopleCount" value="3" min="1" max="10"></div>
+      <div class="field"><label>年级</label>
+        <select id="fGrade"><option value="freshman">大一</option><option value="sophomore_plus">大二及以上</option></select>
+      </div>
       <div class="field"><label>是否已有说明文档</label>
         <select id="fHasDoc"><option value="unknown">不确定</option><option value="yes">有</option><option value="no">没有</option></select>
       </div>
@@ -54,7 +57,7 @@ export function renderCheckForm(mount) {
   mount.querySelector('#checkBtn').onclick = async () => {
     const checked = Array.from(mount.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value)
     // "不确定"的 key 不传，避免被当成 false
-    const profile = { people_count: Number(mount.querySelector('#fPeopleCount').value) }
+    const profile = { people_count: Number(mount.querySelector('#fPeopleCount').value), grade: mount.querySelector('#fGrade').value }
     const doc = mount.querySelector('#fHasDoc').value
     const video = mount.querySelector('#fHasVideo').value
     const teacher = mount.querySelector('#fHasTeacher').value

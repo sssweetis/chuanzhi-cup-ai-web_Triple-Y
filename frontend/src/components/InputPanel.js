@@ -328,6 +328,7 @@ export function renderInputPanel(mount) {
       const changes = (d.changes || []).map(c => `<div class="diff-change diff-${c.type || 'info'}">${c.text || ''}</div>`).join('')
       const affected = (d.affected_todos || []).map(t => `<li>· ${t}</li>`).join('')
       if (d.preview_todo_list) state.comparePreviewTodo = d.preview_todo_list
+      else if (d.affected_todos && d.affected_todos.length) state.comparePreviewTodo = d.affected_todos.map(t => ({ action: t, status: 'not_started' }))
       zone.innerHTML = `<div class="matter-card"><h3>🔄 通知对比结果</h3>
         <div style="margin:10px 0">${changes}</div>
         ${affected ? `<div class="affected-box"><b>受影响待办：</b><ul>${affected}</ul></div>` : ''}

@@ -19,7 +19,7 @@ if (-not $Browser) { throw '未找到 Chrome/Edge，无法自动导出 PDF' }
 
 $Profile = Join-Path $env:TEMP 'tripley_techdoc_pdf_profile'
 $FileUrl = 'file:///' + ($Html -replace '\\', '/')
-& $Browser --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --user-data-dir="$Profile" --print-to-pdf="$Pdf" $FileUrl 2>$null
+& $Browser --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --user-data-dir="$Profile" --no-pdf-header-footer --print-to-pdf="$Pdf" $FileUrl 2>$null
 if (-not (Test-Path $Pdf)) { throw 'PDF 未生成，请打开 HTML 后手动打印为 PDF' }
 $Item = Get-Item $Pdf
 Write-Host ("PDF 已生成：{0}（{1:N0} KB）" -f $Item.FullName, ($Item.Length / 1KB))

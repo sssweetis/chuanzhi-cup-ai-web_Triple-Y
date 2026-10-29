@@ -22,7 +22,7 @@ export function renderInputPanel(mount) {
           <button class="tool" id="quickDemo" style="background:var(--accent);color:#fff;border:none">⚡ 一键体验</button>
         </div>
         <div class="in-bar-right">
-          <span class="char-count" id="charCount">0 / 3000</span>
+          <span class="char-count" id="charCount">0 / 10000</span>
           <button class="btn btn-primary" id="analyzeBtn">AI 智能解析</button>
         </div>
       </div>
@@ -52,6 +52,11 @@ export function renderInputPanel(mount) {
     </div>`
 
   const zone = mount.querySelector('#resultZone')
+
+  function esc(v) {
+    const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }
+    return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => map[c])
+  }
 
   function toast(msg) {
     let t = document.getElementById('toast')
@@ -94,7 +99,7 @@ export function renderInputPanel(mount) {
           getEvidence({ matter: state.analyzeResult, target_type: type, target_id: id })
             .then(res => {
               if (res && res.found) {
-                qEl.innerHTML = (res.is_suggestion ? '<div style="color:#b36b00">⚠ 系统建议（无原文依据）</div>' : '') + '“' + (res.quote || '') + '”'
+                qEl.innerHTML = (res.is_suggestion ? '<div style="color:#b36b00">⚠ 系统建议（无原文依据）</div>' : '') + '“' + esc(res.quote || '') + '”'
               } else { qEl.textContent = quote ? '“' + quote + '”' : '暂无原文' }
             })
             .catch(() => { qEl.textContent = quote ? '“' + quote + '”' : '暂无原文' })
@@ -197,7 +202,7 @@ export function renderInputPanel(mount) {
           sourceText
         }))
         const manual = state.tasks.filter(t => !t.generated)
-        state.tasks = [...manual, ...generated]
+        setState({ tasks: [...manual, ...generated] })
       } catch (e) { /* prepare-list 失败不阻塞主流程 */ }
     } catch (err) {
       const tip = /连不上后端|Failed to fetch|NetworkError/i.test(String(err))
@@ -271,12 +276,12 @@ export function renderInputPanel(mount) {
       const chunks = res.evidence_chunks || res.sources || []
       const chunkHtml = chunks.length
         ? `<div style="margin-top:8px;font-size:12px;color:#888">📌 原文出处：</div>` +
-          chunks.map(c => `<div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:6px 10px;margin:4px 0;font-size:12px">${c.doc_name || c.filename || '材料'} · 片段 ${c.chunk_id || '-'} · 匹配度 ${c.score != null ? Math.round(c.score * 100) + '%' : ''}</div>`).join('')
+          chunks.map(c => `<div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:6px 10px;margin:4px 0;font-size:12px">${esc(c.doc_name || c.filename || '材料')} · 片段 ${esc(c.chunk_id || '-')} · 匹配度 ${c.score != null ? Math.round(c.score * 100) + '%' : ''}</div>`).join('')
         : ''
       out.innerHTML = banner +
-        `<div style="background:#f6f5ff;padding:10px;border-radius:8px;font-size:13px;line-height:1.7">${res.answer || ''}</div>` +
+        `<div style="background:#f6f5ff;padding:10px;border-radius:8px;font-size:13px;line-height:1.7">${esc(res.answer || '')}</div>` +
         chunkHtml
-    } catch (err) { out.innerHTML = `<div style="color:#c0392b;font-size:13px">${err.message}</div>` }
+    } catch (err) { out.innerHTML = `<div style="color:#c0392b;font-size:13px">${esc(err.message)}</div>` }
   }
   mount.querySelector('#demoToggle').onclick = () => {
     const row = mount.querySelector('#demoRow')
@@ -291,7 +296,7 @@ export function renderInputPanel(mount) {
   function syncInput() {
     const ta = mount.querySelector('#taskInput')
     localStorage.setItem('zhiban-input', ta.value)
-    mount.querySelector('#charCount').textContent = `${ta.value.length} / 3000`
+    mount.querySelector('#charCount').textContent = `${ta.value.length} / 10000`
     ta.style.height = 'auto'
     ta.style.height = Math.min(ta.scrollHeight, 300) + 'px'
     // 输入框清空时，下方分析结果也一起清掉

@@ -1,0 +1,1608 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>通知抽取助手 · 技术文档（Triple Y）</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+         font-size: 10pt; line-height: 1.6; color: #222; max-width: 182mm; margin: 0 auto; padding: 6mm 0; }
+  h1 { font-size: 21pt; text-align: center; margin: 0 0 5mm; letter-spacing: 1px; }
+  h2 { font-size: 14pt; border-bottom: 1px solid #c9c9c9; padding-bottom: 1.5mm; margin-top: 7mm; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin-top: 5mm; page-break-after: avoid; }
+  p { margin: 2mm 0; text-align: justify; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.8pt; margin: 2.5mm 0; page-break-inside: avoid; }
+  th, td { border: 1px solid #b9b9b9; padding: 1.6mm 2mm; vertical-align: top; }
+  th { background: #f2f2f2; }
+  pre { background: #f6f8fa; border: 1px solid #e1e4e8; padding: 3mm; font-size: 9pt;
+        white-space: pre-wrap; word-break: break-all; page-break-inside: avoid; }
+  code { background: #f2f4f7; padding: .2mm 1mm; border-radius: 2px; }
+  blockquote { border-left: 3px solid #999; margin: 3mm 0; padding: 1mm 0 1mm 4mm; color: #555; background: #fafafa; }
+  ul, ol { padding-left: 6mm; }
+  .toolbar { position: fixed; top: 10px; right: 10px; }
+  .toolbar button { padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  @media print { .toolbar { display: none; } body { max-width: none; padding: 0; } }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 另存为 PDF</button></div>
+<h1>通知抽取助手 · 技术文档</h1>
+<blockquote>
+<p>队伍：Triple Y ｜ 比赛：传智杯 AI WEB 网页开发挑战赛
+版本：v1.3 ｜ 日期：2026-10-29</p>
+<p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总。当前为省赛提交版；团队正式 Key 计划使用 DeepSeek，尚未配置，演示按 Mock + 本地 OCR 运行，真实模型记录待 Key 到位后补充。</p>
+</blockquote>
+<h2>目录</h2>
+<ol>
+<li>项目概述</li>
+<li>需求分析</li>
+<li>系统架构设计</li>
+<li>AI 技术方案（4.1 模型选型 / 4.2 Prompt 设计 / 4.3 输出稳定性 / 4.4 多模态与 OCR / 4.5 RAG 与可解释性 / 4.6 缺项判断 / 4.7 Agent 与工具 / 4.8 通知变化 / 4.9 安全可控 / 4.10 评估优化）</li>
+<li>核心功能实现</li>
+<li>测试与部署</li>
+<li>创新点</li>
+<li>总结与展望
+附录：运行命令、环境变量与测试数据</li>
+</ol>
+<hr />
+<h2>1. 项目概述</h2>
+<p><strong>问题背景</strong>：校园与职场中的"办事通知"以纯文字、截图、PDF 等形式散落在群消息和公告里，关键信息（截止时间、材料清单、办理步骤、审核要求）分散在长文中。人工阅读容易漏材料、看错时间、混淆流程；通用大模型直接回答又容易编造，用户无法核验。</p>
+<p><strong>一句话价值</strong>：把一段通知变成<strong>可勾选、可溯源、可提醒</strong>的待办清单。</p>
+<p><strong>目标用户</strong>：在校学生（奖助学金、竞赛报名、证件办理）、社团/单位内勤（活动立项、经费报销、场地申请）、职场人士（入职材料、资质办理、行政审批）。</p>
+<p><strong>本期范围（P1）</strong>：文字通知解析、截图识别、文字型 PDF 提取、三档结构化输出、材料清单与缺项核对、查看依据、材料库检索与追问、补充通知对比与变更确认、清单版本/导出、日期核对、会话隔离与删除、清单保存与恢复。
+<strong>后续规划（P2）</strong>：多文件合并解析、复杂条件分支、向量检索/重排、日历同步、多人协作、网页链接抓正文。</p>
+<h3>1.3 与通用 AI / 传统方案的区别</h3>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>输出</th>
+<th>主要问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>人工读通知 + 自己列清单</td>
+<td>个人笔记 / Excel</td>
+<td>慢、容易漏材料、看错截止时间、无法追溯原文</td>
+</tr>
+<tr>
+<td>通用大模型直接总结</td>
+<td>一段自然语言</td>
+<td>可能编造、无法勾选、无法核对缺项、无法保存为任务</td>
+</tr>
+<tr>
+<td>固定规则模板</td>
+<td>固定字段</td>
+<td>泛化差，遇到新通知就要改规则，维护成本高</td>
+</tr>
+<tr>
+<td><strong>本项目</strong></td>
+<td><strong>Matter JSON + 可勾选清单 + 原文出处 + 可调用工具</strong></td>
+<td>需要模型/OCR 能力，复杂表格仍有局限，但输出可执行、可核验、可降级</td>
+</tr>
+</tbody>
+</table>
+<p>核心差异不是“总结得更漂亮”，而是把通知变成<strong>能执行、能核对、能追溯</strong>的结构化对象。</p>
+<h2>2. 需求分析</h2>
+<h3>2.1 典型场景</h3>
+<ul>
+<li>学生收到一条奖学金通知：需要知道<strong>截止时间</strong>、要交<strong>哪些材料</strong>、<strong>交给谁/交到哪</strong>、<strong>先做什么后做什么</strong>。</li>
+<li>社团收到立项通知：需要知道<strong>审核环节</strong>、<strong>依赖关系</strong>（审核通过后才能缴费）、<strong>风险点</strong>（时间紧、材料复用）。</li>
+<li>用户手上已有部分材料：需要系统告诉他<strong>还缺什么</strong>，而不是重复罗列全部要求。</li>
+</ul>
+<h3>2.2 功能需求</h3>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>验收标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>文字通知 → Matter JSON</td>
+<td>返回 title / deadline / materials / step_list 等，结构符合 Schema</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>三档复杂度自适应</td>
+<td>simple 不出现材料/步骤；standard 有材料与步骤；complex 增加审核/依赖/预警</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>用户情况核对</td>
+<td>勾选材料 + 自述情况 → 已准备 / 缺少 / 需要确认 三类</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>查看依据</td>
+<td>每条要求可查看原文片段；无依据标"系统建议"</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>截图解析</td>
+<td>上传截图 → 识别文字 → Matter；格式/大小受限</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>PDF 解析</td>
+<td>文字型 PDF → Matter；扫描版明确提示</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>材料库与追问</td>
+<td>多材料上传、片段编号、检索、回答附出处、材料外拒答</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>保存与恢复</td>
+<td>准备清单/修改内容保存后，刷新或重启仍可恢复</td>
+</tr>
+</tbody>
+</table>
+<h3>2.3 非功能需求</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>要求</th>
+<th>实现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>稳定性</td>
+<td>模型不可用时服务不崩、前端有可读结果</td>
+<td>视觉→本地 OCR→Mock 三层降级；统一错误信封</td>
+</tr>
+<tr>
+<td>可解释</td>
+<td>关键结论能追溯到原文</td>
+<td><code>source_ref.quote</code> + <code>sources</code> + 片段编号 + <code>is_suggestion</code></td>
+</tr>
+<tr>
+<td>性能</td>
+<td>联调/演示响应可接受</td>
+<td>Mock 实测 100 次：平均 10.4ms、P95 16.9ms；真实模型 10~30s（已在前端设 90s 超时）</td>
+</tr>
+<tr>
+<td>安全性</td>
+<td>密钥不入库、材料外不乱答、输出不注入</td>
+<td><code>.env</code> + <code>.gitignore</code>；无依据拒答；前端 <code>esc()</code> 转义</td>
+</tr>
+<tr>
+<td>可维护性</td>
+<td>结构清晰、可自测</td>
+<td>9 套自测脚本 + <code>preflight.py</code> 一键自检 + <code>check_sync.py</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3. 系统架构设计</h2>
+<p>系统采用前后端分离的三层结构：</p>
+<pre><code>浏览器（前端 5173 / 静态托管）
+        │  HTTP + JSON / multipart
+        ▼
+FastAPI 后端（8000）
+  ├─ 入口层：CORS、参数校验、统一响应、异常兜底
+  ├─ 能力层：文本抽取 / 图片解析 / PDF 提取 / 准备清单 / 查看依据 / 文件检索 / 追问
+  │          / 双通知对比 / 版本与导出 / 日期核对 / 会话隔离
+  ├─ 抽取层：A 的 service.py（Prompt + LLM + Matter 结构 + Schema 校验）
+  └─ 存储层：backend/data（准备清单、文件片段索引、对比记录，JSON 原子写）
+        │
+        ▼
+大模型（DeepSeek 官方 API，可配置）
+  文本模型：DeepSeek        视觉模型：TEAM_LLM_MODEL（可选）
+  无 Key 时：离线 Mock + 本地 OCR（RapidOCR）
+</code></pre>
+<p>核心设计原则：<strong>模型只负责"读懂"，结构、判定与降级由代码兜底</strong>，保证演示可复现、失败有反馈。</p>
+<h3>3.1 模块职责</h3>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>职责</th>
+<th>关键技术</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前端</td>
+<td>通知输入、结果卡片、材料勾选、任务清单、对比/确认、出处弹窗、导出</td>
+<td>HTML/CSS/JS + Vite，按 <code>enabled_sections</code> 渲染</td>
+</tr>
+<tr>
+<td>后端入口</td>
+<td>CORS、参数校验、上传限制、统一响应、异常兜底、限流、会话隔离</td>
+<td>FastAPI + Uvicorn</td>
+</tr>
+<tr>
+<td>AI 抽取层</td>
+<td>文本/截图/PDF → Matter；Prompt、Schema、复杂度、RAG、对比、日期工具</td>
+<td><code>service.py</code> + <code>notification_extractor.py</code> + <code>prompt.py</code></td>
+</tr>
+<tr>
+<td>业务能力层</td>
+<td>缺项核对、准备清单、版本历史、导出、材料库、对比记录</td>
+<td><code>prepare_list.py</code>、<code>requirement_checker.py</code>、<code>compare_store.py</code></td>
+</tr>
+<tr>
+<td>存储层</td>
+<td>清单/文件索引/对比记录持久化</td>
+<td>线程锁 + JSON 原子写；Docker volume</td>
+</tr>
+<tr>
+<td>模型层</td>
+<td>文本生成、视觉识别、Function Calling</td>
+<td>DeepSeek 文本 API；视觉模型可选；无 Key 时 Mock + RapidOCR</td>
+</tr>
+</tbody>
+</table>
+<h3>3.2 三条输入通道与数据流</h3>
+<pre><code>[文字通知] ───────────────┐
+[截图] → 视觉模型/本地 OCR ─┼→ 统一抽取 Prompt → Matter JSON
+[PDF]  → pypdf/pymupdf ───┘         │
+                                    ▼
+                        代码约束：复杂度重算 / 字段裁剪 / Schema
+                                    │
+          ┌─────────────────────────┼─────────────────────────┐
+          ▼                         ▼                         ▼
+   前端按区块渲染            准备清单/版本/导出          材料库检索/RAG 追问
+          │                         │                         │
+          └────────── 补充通知对比 / 日期工具 / 用户确认 ──────┘
+                                    │
+                                    ▼
+                         保存（change_log / version）
+</code></pre>
+<h3>3.3 部署拓扑</h3>
+<pre><code>浏览器
+  │ HTTPS
+  ▼
+Nginx（前端静态文件 + /api 反向代理，超时 180s，上传 12MB）
+  │
+  ▼
+FastAPI 容器（Uvicorn，CORS、限流、会话隔离）
+  ├─ backend/data volume（清单、文件索引、对比记录）
+  ├─ 文本模型 DeepSeek；视觉模型可选（未配置走本地 OCR）
+  └─ 本地 OCR（RapidOCR，无视觉 Key 时兜底）
+</code></pre>
+<p>本地开发用 <code>uvicorn</code> + <code>vite</code>；公网演示可用 Docker Compose 或 Render Blueprint，二者都保留同一套环境变量契约。</p>
+<h3>3.4 接口清单</h3>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/analyze</code></td>
+<td>文字 → Matter</td>
+</tr>
+<tr>
+<td><code>POST /api/check</code></td>
+<td>用户勾选 + 自述 → 缺项核对</td>
+</tr>
+<tr>
+<td><code>POST /api/prepare-list</code> / <code>save</code> / <code>GET</code></td>
+<td>准备清单生成 / 保存 / 读取</td>
+</tr>
+<tr>
+<td><code>POST /api/evidence</code>、<code>/index</code></td>
+<td>要求 → 原文依据（无依据标为系统建议）</td>
+</tr>
+<tr>
+<td><code>POST /api/analyze-image</code></td>
+<td>截图 → Matter（视觉模型 / 本地 OCR）</td>
+</tr>
+<tr>
+<td><code>POST /api/analyze-pdf</code></td>
+<td>文字型 PDF → Matter</td>
+</tr>
+<tr>
+<td><code>POST /api/files</code>、<code>GET /api/files</code>、<code>POST /api/files/search</code></td>
+<td>材料上传、片段编号、检索</td>
+</tr>
+<tr>
+<td><code>POST /api/ask</code></td>
+<td>先检索再回答，附出处，材料外拒答</td>
+</tr>
+<tr>
+<td><code>POST /api/compare</code>、<code>GET /api/compare</code>、<code>DELETE /api/compare/{id}</code></td>
+<td>双通知对比、保留各自来源、按会话删除</td>
+</tr>
+<tr>
+<td><code>GET /api/tools/check-date</code></td>
+<td>日期核对（星期/距今/周末/常见节假日）</td>
+</tr>
+<tr>
+<td><code>GET /api/prepare-list/{id}/history</code>、<code>/export</code>、<code>DELETE</code></td>
+<td>版本历史、CSV/Markdown 导出、删除</td>
+</tr>
+<tr>
+<td><code>GET /health</code></td>
+<td>服务状态与当前模式（mock/real）</td>
+</tr>
+</tbody>
+</table>
+<p>所有接口统一返回 <code>{success, data, error}</code>，且始终 HTTP 200，前端只需判断 <code>success</code>。</p>
+<h2>4. AI 技术方案</h2>
+<p>本节按“模型选择 → Prompt → 结构稳定 → 多模态 → RAG → 缺项判断 → Agent/工具 → 通知变化 → 安全 → 评估”展开。</p>
+<table>
+<thead>
+<tr>
+<th>小节</th>
+<th>回答的问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4.1 模型选型</td>
+<td>为什么用通用模型、为什么文本/视觉分开、Key 与降级怎么做</td>
+</tr>
+<tr>
+<td>4.2 Prompt 设计</td>
+<td>怎么让模型稳定输出 Matter、怎么防编造</td>
+</tr>
+<tr>
+<td>4.3 输出稳定性</td>
+<td>模型输出漂移时，代码怎么兜底</td>
+</tr>
+<tr>
+<td>4.4 多模态</td>
+<td>截图/PDF 怎么进入同一套抽取</td>
+</tr>
+<tr>
+<td>4.5 RAG</td>
+<td>材料库怎么检索、怎么附出处、怎么拒答</td>
+</tr>
+<tr>
+<td>4.6 缺项判断</td>
+<td>怎么从“通知要求”推到“用户还缺什么”</td>
+</tr>
+<tr>
+<td>4.7 Agent/工具</td>
+<td>模型怎么调 <code>check_date</code>、为什么不是全自动</td>
+</tr>
+<tr>
+<td>4.8 通知变化</td>
+<td>补充通知怎么对比、确认、留档</td>
+</tr>
+<tr>
+<td>4.9 安全可控</td>
+<td>幻觉、注入、误操作、密钥、会话怎么防</td>
+</tr>
+<tr>
+<td>4.10 评估优化</td>
+<td>用什么指标评估、下一步怎么优化</td>
+</tr>
+</tbody>
+</table>
+<h2>4.1 模型选型</h2>
+<h3>4.1.1 选型约束</h3>
+<p>本项目的输入是中文办事通知，输出是字段固定的 Matter JSON，并且要同时满足“可解释、可降级、可演示”。因此模型选型不是单纯比较“谁更聪明”，而是按下面 7 个约束综合取舍：</p>
+<table>
+<thead>
+<tr>
+<th>约束</th>
+<th>具体要求</th>
+<th>对选型的影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>中文长文本</td>
+<td>能稳定理解公文、通知、表格截图里的中文</td>
+<td>优先选中文语料充分、中文指令跟随稳定的通用模型</td>
+</tr>
+<tr>
+<td>结构化输出</td>
+<td>能按指定 JSON 字段输出，不能夹带解释</td>
+<td>需要支持 JSON 模式或强 JSON 指令跟随的模型</td>
+</tr>
+<tr>
+<td>多模态</td>
+<td>截图里可能同时有文字、表格、数字、日期</td>
+<td>文本模型与视觉模型分开配置，视觉模型单独选型</td>
+</tr>
+<tr>
+<td>时延与成本</td>
+<td>单次解析 10–30 秒可接受，演示成本可控</td>
+<td>不盲目追求最大参数模型；按任务难度选性价比档位</td>
+</tr>
+<tr>
+<td>供应商可用性</td>
+<td>比赛现场网络、额度、接口稳定性不可控</td>
+<td>团队统一使用 DeepSeek 官方 API，账号/额度/账单集中管理</td>
+</tr>
+<tr>
+<td>密钥安全</td>
+<td>Key 不能进入前端和公开仓库</td>
+<td>Key 只放后端 <code>.env</code>，前端只调后端</td>
+</tr>
+<tr>
+<td>可降级</td>
+<td>没有 Key 或接口失败时仍能演示</td>
+<td>无 Key 走 Mock / 本地 OCR，接口失败有明确错误与兜底</td>
+</tr>
+</tbody>
+</table>
+<h3>4.1.2 文本模型：团队统一使用 DeepSeek</h3>
+<p>团队正式 Key 统一使用 DeepSeek 的文本模型，通过环境变量配置：</p>
+<pre><code class="language-env"># 团队正式 Key 使用 DeepSeek
+LLM_API_KEY=&lt;your-deepseek-key&gt;
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-chat
+</code></pre>
+<p>选择 DeepSeek 的理由：</p>
+<ol>
+<li><strong>团队账号统一</strong>：一个团队 Key、一个文本模型，额度、账单和调用记录集中管理，避免多人用不同供应商/不同 Key 导致结果不可复现。</li>
+<li><strong>中文通知理解合适</strong>：DeepSeek 对中文公文、通知、材料清单这类长文本的指令跟随和语义理解比较稳定，适合“把通知拆成结构化字段”的任务。</li>
+<li><strong>结构化输出可用</strong>：使用 <code>response_format={"type": "json_object"}</code> + <code>temperature=0</code>，配合 JSON Schema 和代码字段裁剪，能稳定产出 Matter；默认选 <code>deepseek-chat</code> 做抽取，<code>deepseek-reasoner</code> 不作为默认，因为抽取任务对延迟和成本更敏感。</li>
+<li><strong>成本可控</strong>：按量计费，输入长度受 <code>MAX_TEXT_LENGTH</code> 控制，抽取任务不需要长链推理；相比每次上最大参数模型，更适合比赛演示和反复联调。</li>
+<li><strong>国内访问更稳定</strong>：比赛现场网络、代理和跨境延迟不可控，使用国内可访问的 DeepSeek 官方 API，减少现场演示的网络风险。</li>
+<li><strong>接入成本低</strong>：DeepSeek 提供标准 Chat Completions 接口，项目现有 SDK 可以直接调用；<code>LLM_BASE_URL</code> / <code>LLM_MODEL</code> 保持配置化是为了本地测试和后续迁移，<strong>团队正式环境固定使用 DeepSeek</strong>。</li>
+<li><strong>可降级</strong>：没有团队 Key 时走离线 Mock；接口失败返回统一错误信封，不会让页面白屏。</li>
+</ol>
+<p><strong>为什么不做微调 / 不用本地小模型？</strong></p>
+<p>本项目的难点不是“模型知不知道什么是奖学金”，而是“能不能稳定输出指定结构、能不能不编造、能不能和代码规则配合”。微调需要标注数据、训练资源和持续维护，比赛周期内收益不稳定；本地 7B 级模型在中文长通知、JSON 稳定性、工具调用上还需要额外评测和调优。当前方案把“语义理解”交给 DeepSeek，把“结构、判定、降级”交给代码，整体更可控，也符合团队统一使用 DeepSeek 的部署方式。</p>
+<h3>4.1.3 视觉模型：单独配置，本地 OCR 兜底</h3>
+<p>截图解析使用独立的视觉模型配置：</p>
+<pre><code class="language-env"># 视觉模型单独配置；不强制与文本模型同一供应商
+# 若团队 DeepSeek Key 未开通多模态，下面三项可留空，截图走本地 OCR
+TEAM_LLM_API_KEY=&lt;your-vision-key&gt;
+TEAM_LLM_BASE_URL=&lt;vision-base-url&gt;
+TEAM_LLM_MODEL=&lt;vision-model&gt;
+</code></pre>
+<blockquote>
+<p>团队正式 Key 预计用于 DeepSeek 文本模型；视觉模型是否复用同一 Key，需要确认该 Key 是否支持图片输入。未确认前，截图默认走本地 RapidOCR，不影响文字主流程。</p>
+</blockquote>
+<p>单独配置的原因：</p>
+<ul>
+<li>视觉模型和文本模型的供应商、价格、额度可能不同，拆开后可以分别替换；</li>
+<li>截图请求更贵、更慢，只在用户上传图片时调用，不拖累文本主流程；</li>
+<li>视觉模型不可用时，自动降级到 <strong>RapidOCR（onnxruntime）</strong> 本地识别，再把文字送入统一抽取管道；</li>
+<li>对“字迹模糊、表格错位、数字被切断”等视觉歧义，模型输出 <code>confirmation_needed</code>，让用户确认，而不是猜。</li>
+</ul>
+<h3>4.1.4 模型分工</h3>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>使用的模型/工具</th>
+<th>输出</th>
+<th>失败时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文字通知抽取</td>
+<td>文本模型（<code>LLM_*</code>）</td>
+<td>Matter JSON</td>
+<td>无 Key → Mock；接口失败 → 可读错误</td>
+</tr>
+<tr>
+<td>截图识别</td>
+<td>视觉模型（<code>TEAM_LLM_*</code>）</td>
+<td>Matter JSON + <code>confirmation_needed</code></td>
+<td>无 Key/失败 → RapidOCR → 统一抽取</td>
+</tr>
+<tr>
+<td>PDF 文字提取</td>
+<td>pypdf / pymupdf</td>
+<td>纯文本 + 页码</td>
+<td>扫描件 → 明确提示改用截图</td>
+</tr>
+<tr>
+<td>材料库追问</td>
+<td>文本模型 + 本地检索</td>
+<td>回答 + 出处</td>
+<td>无 Key → 直接返回最相关原文；无依据 → 拒答</td>
+</tr>
+<tr>
+<td>日期核对</td>
+<td>本地 <code>check_date</code> 工具</td>
+<td>剩余天数/星期/风险/建议</td>
+<td>不依赖模型，始终可执行</td>
+</tr>
+<tr>
+<td>补充通知对比</td>
+<td>规则差异 + 可选文本模型</td>
+<td><code>diff</code> + 受影响待办</td>
+<td>模型失败 → 规则差异兜底</td>
+</tr>
+<tr>
+<td>状态推演</td>
+<td>文本模型 + 代码兜底</td>
+<td>更新后的 Matter</td>
+<td>模型失败 → <code>_code_level_fallback</code></td>
+</tr>
+</tbody>
+</table>
+<h3>4.1.5 Key 配置、安全与降级</h3>
+<ul>
+<li>Key 只从后端环境变量读取，前端不接触；<code>.env</code> 已被 <code>.gitignore</code> 忽略，仓库只提交 <code>.env.example</code>。</li>
+<li>没有 Key 且 <code>LLM_ENABLE_MOCK=1</code> 时，<code>/health</code> 返回 <code>mode=mock</code>：文本走离线 Mock，截图走本地 OCR，保证演示不白屏。</li>
+<li>配置团队 DeepSeek Key 后 <code>/health</code> 返回 <code>mode=real</code>，文本与 RAG 走真实模型；视觉模型已配置时截图走真实视觉模型，否则继续走本地 OCR。</li>
+<li>开发阶段的个人 Key（非团队 Key）只用于本机联调，没有提交到仓库，也不作为团队验收数据。</li>
+<li>真实模型接口失败时，后端返回统一错误信封，不会把异常堆栈或 Key 暴露给前端。</li>
+<li>真实模式默认按 IP + 路径限流（普通接口 60 次/分钟、上传 10 次/分钟），避免演示额度被刷爆。</li>
+</ul>
+<h3>4.1.6 当前验收状态（重要）</h3>
+<p>截至本版提交，<strong>团队正式 Key（计划 DeepSeek）尚未配置</strong>，仓库默认仍按 <strong>Mock + 本地 OCR</strong> 运行。开发阶段 A 曾用个人 Key（非团队 Key）做过本机接口联调，但该 Key 未提交到仓库，也没有形成团队验收数据；真实 DeepSeek 文本模型、视觉模型、Function Calling 的 token、耗时、费用记录尚未产生，不能把个人联调或 Mock 数据当成团队真实模型效果。</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>当前状态</th>
+<th>团队 DeepSeek Key 到位后要补</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文本解析</td>
+<td>个人 Key（非团队 Key）联调过；仓库默认 Mock</td>
+<td>用 DeepSeek 重跑 3 个样本，记录耗时、token、费用</td>
+</tr>
+<tr>
+<td>截图识别</td>
+<td>本地 OCR 通过；视觉模型未配置</td>
+<td>确认 DeepSeek Key 是否支持图片输入；不支持则保持本地 OCR</td>
+</tr>
+<tr>
+<td>RAG 追问</td>
+<td>本地检索通过；个人 Key 联调过</td>
+<td>用 DeepSeek 重跑回答质量、出处准确率与耗时</td>
+</tr>
+<tr>
+<td>日期工具调用</td>
+<td>本地工具 + 假客户端协议通过</td>
+<td>真实 DeepSeek Function Calling 一次完整记录</td>
+</tr>
+<tr>
+<td>补充通知对比</td>
+<td>规则差异通过；个人 Key 联调过</td>
+<td>用 DeepSeek 对比语义差异、误判案例与费用</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>结论：<strong>当前按“无团队 Key / Mock 演示”提交</strong>。团队 DeepSeek Key 到位后，按 <code>LLM_*</code>（文本）和 <code>TEAM_LLM_*</code>（视觉，可选）配置，重跑 <code>preflight.py</code> 并补充上表记录，再更新本节与 README。记录模板见 <a href="真实模型验收记录.md"><code>真实模型验收记录.md</code></a>。</p>
+</blockquote>
+<h2>4.2 Prompt 设计</h2>
+<h3>4.2.1 Prompt 的组织方式</h3>
+<p>Prompt 不是一段“万能提示词”，而是按任务拆成 6 个专用模板，统一放在 <code>src/prompt.py</code>，并同步到 <code>backend/prompt.py</code>：</p>
+<table>
+<thead>
+<tr>
+<th>Prompt</th>
+<th>用途</th>
+<th>关键约束</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SYSTEM_PROMPT</code></td>
+<td>文字通知 → Matter</td>
+<td>只抽原文、禁止编造、三档模式、字段互斥、todo 非空</td>
+</tr>
+<tr>
+<td><code>UPDATE_PROMPT</code></td>
+<td>用户操作 → 状态推演</td>
+<td>交付动作防误勾、顺序回填、保持 ID 不变</td>
+</tr>
+<tr>
+<td><code>IMAGE_CHECK_RULES</code></td>
+<td>截图识别附加规则</td>
+<td>只对“看不清”写 <code>confirmation_needed</code>，不把缺失当模糊</td>
+</tr>
+<tr>
+<td><code>RAG_QA_PROMPT</code></td>
+<td>材料库追问</td>
+<td>先查材料再回答、必须附出处、无依据拒答</td>
+</tr>
+<tr>
+<td><code>COMPARE_PROMPT</code></td>
+<td>原通知 vs 补充通知</td>
+<td>找改期/增删材料/冲突，拿不准必须让用户确认</td>
+</tr>
+<tr>
+<td><code>DATE_TOOL_SYSTEM_PROMPT</code></td>
+<td>日期工具调用</td>
+<td>必须先调用 <code>check_date</code>，再根据工具结果给建议</td>
+</tr>
+</tbody>
+</table>
+<p>拆分的好处是：每个 Prompt 只负责一类判断，规则更短、更不容易互相冲突；出问题时也能定位到具体模板，而不是在一段超长 Prompt 里猜。</p>
+<h3>4.2.2 角色与任务边界</h3>
+<p><code>SYSTEM_PROMPT</code> 的第一条不是“尽量提取”，而是<strong>只提取原文出现过的内容</strong>：</p>
+<ul>
+<li>原文明确写出的字段，<code>is_suggestion=false</code>，必须带 <code>source_ref.quote</code>；</li>
+<li>AI 自己补充的建议，<code>is_suggestion=true</code>，<code>source_ref.quote</code> 可以为空；</li>
+<li>原文没有的字段直接省略，禁止输出 <code>null</code> 占位；</li>
+<li>原文只有“12月10日前”但没有年份，按缺失处理，不编造年份；</li>
+<li>“各学院需组织……”这类不属于个人用户的动作，不进入个人 <code>step_list</code>。</li>
+</ul>
+<p>这条边界直接对应比赛的“AI 安全与可控性”：用户能看到每条要求的原文依据，没有依据的内容会被标成“系统建议”，而不是伪装成原文。</p>
+<h3>4.2.3 系统时间注入与相对时间归一化</h3>
+<p>Prompt 里注入 <code>NOW = {{NOW}}</code>，由服务端在每次请求时写入当前时间（Asia/Shanghai）。模型负责把“下周三前”“月底前”“通知发布后 7 天内”这类相对时间换算成绝对时间，统一输出 ISO 8601（+08:00）。代码层再做一次解析和校验，避免模型输出“下周三”这种前端无法计算的值。</p>
+<h3>4.2.4 三档模式：模型先判断，代码再重算</h3>
+<p>Prompt 要求模型输出 <code>detected_features</code>、<code>complexity_score</code> 和 <code>mode</code>，但<strong>最终模式不采信模型</strong>。服务端在 <code>notification_extractor.py</code> 里做三件事：</p>
+<ol>
+<li>用固定公式重算复杂度：</li>
+</ol>
+<pre><code class="language-text">score = 0.2*has_deadline + 0.1*has_multiple_reminders + 0.2*has_multiple_steps
+      + 0.2*has_materials + 0.1*has_review + 0.1*has_dependencies
+      + 0.1*has_recurrence + 0.1*has_sub_steps
+</code></pre>
+<ol start="2">
+<li>按优先级判定：</li>
+</ol>
+<pre><code class="language-text">has_sub_steps / has_review / has_dependencies → complex
+score &lt; 0.3 → simple
+0.3 ≤ score ≤ 0.6 → standard
+score &gt; 0.6 → complex
+</code></pre>
+<ol start="3">
+<li>取“模型给的 mode”和“公式算出的 mode”中<strong>更高</strong>的一档，防止模型把复杂通知降级成 simple，导致材料/步骤被裁掉。</li>
+</ol>
+<p>这样同一份通知在不同模型、不同温度下，模式判定仍然稳定、可复现。</p>
+<h3>4.2.5 字段互斥与 <code>enabled_sections</code></h3>
+<p>三档模式不是“字段多一点少一点”，而是有明确的互斥表。<code>enforce_mode</code> 会直接删除当前模式不允许的字段：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>允许的 <code>enabled_sections</code></th>
+<th>主要保留字段</th>
+<th>明确禁止</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>simple</td>
+<td>summary, schedule, source</td>
+<td>title, deadline, reminders, sources</td>
+<td>materials, step_list, todo_list, warning_list, attachments, location 等</td>
+</tr>
+<tr>
+<td>standard</td>
+<td>summary, schedule, content, steps, materials, source</td>
+<td>加 materials, step_list, attachments, key_points</td>
+<td>recurrence, permissions, audit_log, comments</td>
+</tr>
+<tr>
+<td>complex</td>
+<td>全部 8 个区块</td>
+<td>全部字段</td>
+<td>无</td>
+</tr>
+</tbody>
+</table>
+<p>另外，simple/standard 的步骤里会删除 <code>sub_step_list</code>、<code>dependencies</code>、<code>parallel</code>、<code>condition</code>、<code>review</code>、<code>owner</code> 等复杂字段；standard 只保留 <code>deadline_risk</code>、<code>missing_material</code> 两类预警。这样前端只渲染 <code>enabled_sections</code> 声明的区块，不会出现“简单通知给一堆空模块”。</p>
+<h3>4.2.6 ID、命名与依赖规则</h3>
+<ul>
+<li><code>step_id</code> / <code>material_id</code> / <code>todo_id</code> 必须按顺序编号，例如 <code>step_1</code>、<code>mat_1</code>、<code>todo_1</code>；</li>
+<li><code>material_name</code> 必须是 2–10 字的简短名词短语，例如“报名表”“成绩单”，不能把整句话塞进去；</li>
+<li><code>step_list</code> 是“阶段”（2–5 个），<code>todo_list</code> 是“阶段里的具体动作”，两者粒度必须分开；</li>
+<li>只有原文明确写了“A 完成后才能做 B”，才写 <code>dependencies</code>；没有明确依赖就按并行处理；</li>
+<li><code>todo_list</code> 绝对不允许为空，<code>action</code> 必须是完整动宾短语，例如“准备并填写报名表”。</li>
+</ul>
+<h3>4.2.7 结构化输出的稳定性</h3>
+<p>Prompt 层和代码层共同保证 JSON 稳定：</p>
+<ol>
+<li><strong>Prompt 层</strong>：只输出 JSON、不要 Markdown、不要解释；字段名和类型写死；空数组/空对象省略；<code>temperature=0</code>。</li>
+<li><strong>接口层</strong>：优先使用 <code>response_format={"type": "json_object"}</code>；供应商不支持时自动去掉该参数重试。</li>
+<li><strong>解析层</strong>：去掉 <code>``json 代码围栏后再</code>json.loads`；解析失败返回可读错误，不把脏数据交给前端。</li>
+<li><strong>校验层</strong>：<code>jsonschema</code> 校验 Matter 结构，失败直接报错。</li>
+<li><strong>修补层</strong>：<code>_fix_todo_actions</code> 补空 action，<code>_fix_step_titles</code> 补空 title，<code>_rebuild_missing_items</code> 重建缺项，<code>_merge_ai_output</code> 以旧结构为基准合并，模型漏字段不会把原数据冲掉。</li>
+<li><strong>兜底层</strong>：模型失败时走 <code>_code_level_fallback</code>，至少保留基础状态联动。</li>
+</ol>
+<h3>4.2.8 状态推演 Prompt：防止“材料齐了就把提交动作也勾了”</h3>
+<p><code>UPDATE_PROMPT</code> 的核心不是“让模型改状态”，而是给状态推演立规矩：</p>
+<ul>
+<li><strong>交付动作防误勾</strong>：包含“提交/发送/上交/上传/打包/初审/审核/盖章”的动作，即使材料都准备好了，也不能自动标完成，必须用户明确确认；</li>
+<li><strong>顺序与并行区分</strong>：有明确“先 A 后 B”的依赖，完成 B 时沿链回填 A；并行分支互不影响；</li>
+<li><strong>ID 不变</strong>：禁止重命名或删除业务条目；</li>
+<li><strong>只改被提到的材料</strong>：用户没说的材料保持原状，不猜；</li>
+<li><strong>代码兜底</strong>：模型输出漂移时，<code>_sequential_backfill</code>、<code>_code_level_fallback</code>、<code>_fix_todo_actions</code> 继续完成基础联动。</li>
+</ul>
+<h3>4.2.9 图片 Prompt：只对“看不清”要求确认</h3>
+<p><code>IMAGE_CHECK_RULES</code> 明确区分两类情况：</p>
+<ul>
+<li><strong>视觉歧义</strong>（字迹模糊、纸张皱褶、遮挡、表格错位、数字被切断）→ 写入 <code>confirmation_needed</code>；</li>
+<li><strong>原文就没写</strong>（只有“12月10日前”没有年份、单位没写全称、材料压根没提）→ 属于缺失，不写 <code>confirmation_needed</code>，也不编造。</li>
+</ul>
+<p>这条规则避免把“信息缺失”误报成“识别失败”，也避免模型用确认弹窗掩盖自己没抽到的事实。</p>
+<h3>4.2.10 RAG / 对比 / 工具调用 Prompt</h3>
+<ul>
+<li><strong>RAG 追问</strong>：先检索、再回答；回答必须附“文件名 - 片段ID - 页码”；检索不到就输出“【未找到依据】……”，不允许用外部常识补答。</li>
+<li><strong>补充通知对比</strong>：明确写“以此为准/原通知作废”时，改期按补充通知处理；没写时，改期、删材料一律要求用户确认；只输出差异，不重复编造原文。</li>
+<li><strong>日期工具调用</strong>：要求模型先调用 <code>check_date</code>，再根据工具返回的 <code>days_left / is_weekend / suggested_finish_at</code> 生成建议；模型不调用时，代码层仍会执行一次工具，保证“至少有一次真实调用”。</li>
+<li><strong>状态更新</strong>：只允许改状态和补缺项，不允许改业务字段；模型失败时保留原清单并返回错误。</li>
+</ul>
+<h3>4.2.11 Prompt 迭代经验</h3>
+<p>这版 Prompt 不是一次写成的，主要迭代点：</p>
+<ol>
+<li>从“让模型自由总结”改成“固定字段 + JSON Schema”，解决前端无法渲染的问题；</li>
+<li>从“模型自己给 mode”改成“公式重算 + 取更高档”，解决复杂通知被降级；</li>
+<li>从“材料/步骤混在一起”改成“step 是阶段、todo 是动作”，解决清单粒度混乱；</li>
+<li>从“没有依据也硬答”改成“source_ref + is_suggestion + 无依据拒答”，解决幻觉；</li>
+<li>从“改期直接覆盖”改成“差异预览 + 用户确认 + change_log”，解决补充通知误覆盖；</li>
+<li>从“日期让模型算”改成“模型调工具、代码执行”，解决模型算错日期和周末的问题。</li>
+</ol>
+<h2>4.3 输出稳定性（C 侧实现）</h2>
+<ol>
+<li><strong>复杂度重算</strong>：不采信模型给的分数，用固定公式
+   <code>0.2·deadline + 0.1·多提醒 + 0.2·多步骤 + 0.2·材料 + 0.1·审核 + 0.1·依赖 + 0.1·周期 + 0.1·子步骤</code>，
+   再按 <code>has_sub_steps/has_review/has_dependencies → complex</code>、<code>&lt;0.3 simple</code>、<code>0.3–0.6 standard</code>、<code>&gt;0.6 complex</code> 判定。</li>
+<li><strong>字段裁剪</strong>：<code>enforce_mode</code> 按模式删除互斥字段（simple 不出现 materials/step_list/todo_list 等），保证前端渲染契约稳定。</li>
+<li><strong>Schema 校验</strong>：<code>jsonschema</code> 校验 Matter 结构，失败直接返回可读错误，不把脏数据交给前端。</li>
+<li><strong>三层降级</strong>：真实模型 → 本地 OCR（图片）→ 离线 Mock（无 Key），任一层可用即可演示。</li>
+</ol>
+<h2>4.4 多模态与 OCR（A + C 共同实现）</h2>
+<h3>4.4.1 分工与处理流水线</h3>
+<ul>
+<li><strong>A 侧</strong>：<code>analyze_notification_from_image</code> 视觉抽取函数、截图专用 Prompt 规则（表格/人数/日期/材料/金额）、<code>confirmation_needed</code> 判定。</li>
+<li><strong>C 侧</strong>：<code>/api/analyze-image</code> 接口、文件大小/格式校验、本地 RapidOCR 兜底、统一抽取管道。</li>
+</ul>
+<pre><code>用户上传截图
+  → 格式/大小校验（JPG/PNG/WEBP，≤5MB）
+  → 有视觉 Key：视觉模型 + 截图专用 Prompt
+  → 无 Key/调用失败：RapidOCR 识别文字 → 统一抽取 Prompt
+  → Matter JSON + confirmation_needed
+  → 前端黄色提示条 + 确认弹窗
+</code></pre>
+<h3>4.4.2 截图识别重点</h3>
+<p>截图与纯文字不同，通知里的关键信息经常以“表格 + 短句 + 数字”混排出现。Prompt 要求优先识别：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>例子</th>
+<th>输出字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>时间</td>
+<td>11月8日18:00、截止到本周五</td>
+<td><code>deadline.due_at</code></td>
+</tr>
+<tr>
+<td>材料</td>
+<td>报名表、成绩单、身份证复印件</td>
+<td><code>materials[]</code></td>
+</tr>
+<tr>
+<td>人数/组队</td>
+<td>每队 3–5 人、限报 2 队</td>
+<td><code>key_points</code> / <code>warning_list</code></td>
+</tr>
+<tr>
+<td>金额</td>
+<td>报名费 50 元、资助 2000 元</td>
+<td><code>key_points</code></td>
+</tr>
+<tr>
+<td>表格</td>
+<td>材料清单表、评审时间表</td>
+<td><code>materials</code> / <code>step_list</code></td>
+</tr>
+</tbody>
+</table>
+<h3>4.4.3 视觉歧义与“看不清”规则</h3>
+<p><code>IMAGE_CHECK_RULES</code> 只把<strong>视觉歧义</strong>写入 <code>confirmation_needed</code>：</p>
+<ul>
+<li>字迹模糊、纸张皱褶、遮挡、反光；</li>
+<li>表格错位、数字被切断、日期只有两位数年份；</li>
+<li>同一字段出现两个互相冲突的值。</li>
+</ul>
+<p>以下情况<strong>不写</strong> <code>confirmation_needed</code>，而是按“原文没写”处理：只写“12月10日前”没有年份、单位没写全称、材料压根没提。这样避免把“信息缺失”误报成“识别失败”，也避免模型用确认弹窗掩盖漏抽。</p>
+<h3>4.4.4 PDF 处理与边界</h3>
+<p><code>POST /api/analyze-pdf</code> 接收 ≤10MB、≤30 页的文字型 PDF，用 pypdf / pymupdf 提取逐页文字，再走统一抽取。扫描版提取不到文字时明确返回“请改用清晰截图或直接粘贴文字”，不返回空 Matter。PDF 的页码会保留在片段元数据里，方便 RAG 引用时标注页码。</p>
+<h3>4.4.5 多模态融合策略</h3>
+<table>
+<thead>
+<tr>
+<th>输入</th>
+<th>预处理</th>
+<th>抽取</th>
+<th>失败兜底</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文字</td>
+<td>长度校验、<code>NOW</code> 注入</td>
+<td>文本模型</td>
+<td>无 Key → Mock</td>
+</tr>
+<tr>
+<td>截图</td>
+<td>视觉模型 / RapidOCR</td>
+<td>文本模型（统一 Prompt）</td>
+<td>视觉失败 → OCR → Mock</td>
+</tr>
+<tr>
+<td>PDF</td>
+<td>pypdf / pymupdf 提取</td>
+<td>文本模型（统一 Prompt）</td>
+<td>提取失败 → 提示改用截图</td>
+</tr>
+</tbody>
+</table>
+<p>三条通道最终都收敛到同一个 Matter 结构和同一套代码约束，前端不需要为不同输入写三套渲染逻辑。</p>
+<h2>4.5 RAG 与可解释性（A 实现，C 接入）</h2>
+<h3>4.5.1 RAG 架构</h3>
+<pre><code>材料上传（TXT/MD/PDF）
+  → 文本切片（按长度 + 重叠）
+  → 片段编号（file_xxx_c1 / doc_pdf_1_p1_c1）
+  → 检索打分（中文二元组 + 词频覆盖 + 连续字串 LCS）
+  → Top-K 片段组装上下文
+  → LLM 回答（必须附出处）
+  → 无依据：直接拒答，不调用模型编造
+</code></pre>
+<p>A 侧负责 <code>NotificationRetriever</code> 检索器、打分、<code>ask_question_with_rag</code>、<code>source_ref</code> / <code>is_suggestion</code> 规则；C 侧负责材料上传/存储、<code>/api/files</code>、<code>/api/ask</code>、<code>/api/evidence</code> 接口接入。</p>
+<h3>4.5.2 切片、编号与检索打分</h3>
+<ul>
+<li>片段带唯一编号、文件名、页码（如有）、<code>char_start/char_end</code>；</li>
+<li>检索前先做中文二元组、英文/数字词、停用词过滤；</li>
+<li>打分综合三部分：词项覆盖率、词项权重、连续字串匹配（LCS）加分，低于阈值不返回；</li>
+<li>返回 Top-K（默认 3–5）片段，前端展示文件名、片段号、匹配度。</li>
+</ul>
+<blockquote>
+<p>当前是<strong>词法检索</strong>，不是向量检索。优点是零额外服务、可解释、演示稳定；缺点是同义改写、跨段落归纳召回弱，已列入 P2 的向量检索 + 重排。</p>
+</blockquote>
+<h3>4.5.3 生成、出处与拒答</h3>
+<p><code>RAG_QA_PROMPT</code> 强制：</p>
+<ol>
+<li>回答 100% 来自检索片段，不使用外部常识；</li>
+<li>每条结论附 <code>【出处：文件名 - 片段ID（第X页）】</code>；</li>
+<li>检索为空时输出“【未找到依据】现有材料中未提及……”，不调用模型补答；</li>
+<li>多项要求分点回答，简练易读。</li>
+</ol>
+<h3>4.5.4 可解释性：source_ref 与系统建议</h3>
+<p>Matter 里每条材料/步骤/待办/截止/预警/要点都可以带 <code>source_ref.quote</code>。<code>/api/evidence</code> 返回原文依据；没有原文引用的条目标 <code>is_suggestion=true</code>，前端用黄色“系统建议（无原文依据）”展示。这样用户能区分“通知明确要求”和“AI 补充建议”，而不是把所有内容混成一段看似权威的总结。</p>
+<h3>4.5.5 评估指标与当前局限</h3>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>定义</th>
+<th>当前状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>字段抽取准确率</td>
+<td>标题/截止/材料/步骤与原文一致的比例</td>
+<td>Mock 结构通过；真实 DeepSeek 待 Key</td>
+</tr>
+<tr>
+<td>材料召回率</td>
+<td>原文要求材料被抽出的比例</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>出处命中率</td>
+<td>回答引用的片段确实包含依据的比例</td>
+<td>本地检索可复现；真实模型待 Key</td>
+</tr>
+<tr>
+<td>拒答正确率</td>
+<td>材料外问题被正确拒绝的比例</td>
+<td>本地检索用例通过</td>
+</tr>
+<tr>
+<td>检索耗时</td>
+<td>Top-K 检索耗时</td>
+<td>Mock 100 次平均约 10–14ms</td>
+</tr>
+<tr>
+<td>生成耗时/费用</td>
+<td>真实模型首 token/总耗时/token 费用</td>
+<td>⏳ 待团队 DeepSeek Key</td>
+</tr>
+</tbody>
+</table>
+<p>后续优化：向量检索 + rerank、片段去重、按标题/材料类型加权、引用片段可点击回原文。</p>
+<h2>4.6 缺项判断与状态推演（A 规则 + C 接口）</h2>
+<h3>4.6.1 三类核对结果</h3>
+<p><code>/api/check</code> 的输入是 Matter + 用户勾选 + 用户自述，输出不是简单的“缺/不缺”，而是：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>含义</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>missing_required</code></td>
+<td>原文明确要求、用户未勾选的必交材料</td>
+<td>成绩单、身份证复印件</td>
+</tr>
+<tr>
+<td><code>missing_optional</code></td>
+<td>原文标为可选、用户未勾选</td>
+<td>获奖证明（选填）</td>
+</tr>
+<tr>
+<td><code>unchecked_unspecified</code> / <code>need_confirm</code></td>
+<td>原文没写清是否必交，或截止时间缺失</td>
+<td>“材料是否必交”“截止时间待确认”</td>
+</tr>
+<tr>
+<td><code>profile_issues</code></td>
+<td>用户自述情况与原文要求冲突</td>
+<td>原文要视频，用户说“没有”</td>
+</tr>
+</tbody>
+</table>
+<p>同时输出 <code>ready</code>、<code>ready_ratio</code> 和一句话结论，前端直接展示“还缺 2 项必交材料：成绩单、身份证复印件”。</p>
+<h3>4.6.2 状态推演规则</h3>
+<p>用户勾选材料或完成某一步后，系统不是简单地把所有相关项都打勾，而是按下面的规则推演：</p>
+<ol>
+<li><strong>材料 → 待办联动</strong>：材料 <code>prepared</code> 后，只把非交付类、且依赖该材料的待办置为 <code>completed</code>；</li>
+<li><strong>交付动作防误勾</strong>：包含“提交/发送/上交/上传/打包/初审/审核/盖章”的动作，即使材料齐了也不自动完成，必须用户明确确认；</li>
+<li><strong>依赖链回填</strong>：若后续步骤完成，且它与前置步骤是明确的顺序依赖，则沿链把前置材料标记为已准备；并行分支互不影响；</li>
+<li><strong>代码层兜底</strong>：模型输出漂移时，<code>_merge_ai_output</code> 以原结构为基准只吸收状态字段，<code>_fix_todo_actions</code> / <code>_fix_step_titles</code> 补空字段，<code>_code_level_fallback</code> 完成基础联动；</li>
+<li><strong>缺项重建</strong>：每次状态变化后重新计算 <code>missing_items</code>，只保留仍缺失的必填材料。</li>
+</ol>
+<h3>4.6.3 为什么不让模型直接改整份清单</h3>
+<p>模型适合判断“这句话是什么意思”，不适合保证“ID 不变、顺序不乱、旧字段不丢”。因此状态更新采用“模型只改状态、代码保留结构”的方式：模型返回的 <code>materials/step_list/todo_list</code> 只吸收 <code>status</code> / <code>status_desc</code>，其余字段以原 Matter 为准。即使模型漏返回某个列表，用户已保存的清单也不会被清空。</p>
+<h2>4.7 Agent 工作流与工具调用（A 实现）</h2>
+<h3>4.7.1 受控 Agent，而不是全自动 Agent</h3>
+<p>本项目采用<strong>受控 Agent 工作流</strong>：</p>
+<ul>
+<li>模型负责理解意图、选择是否调用工具；</li>
+<li>代码负责执行工具、校验参数、兜底；</li>
+<li>用户在关键动作（覆盖清单、删除材料、保存新版本）上确认。</li>
+</ul>
+<p>这样做的原因是办事场景对“误操作”的容忍度很低：自动帮用户删掉材料、改掉截止时间，比“多问一句”风险大得多。我们把自主性限制在“信息整理”和“建议”层，把写操作交给用户确认。</p>
+<h3>4.7.2 工具清单</h3>
+<table>
+<thead>
+<tr>
+<th>工具/能力</th>
+<th>触发场景</th>
+<th>输入</th>
+<th>输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>check_date</code></td>
+<td>清单有截止时间，需要核对星期/距今/周末</td>
+<td><code>due_at</code>、可选 <code>now</code></td>
+<td>剩余天数、星期、是否周末、风险等级、建议完成时间</td>
+</tr>
+<tr>
+<td>补充通知对比</td>
+<td>用户上传同一事项的原通知 + 补充通知</td>
+<td>两份 Matter + 原文</td>
+<td><code>changes</code>、<code>affected_todos</code>、<code>confirmation_needed</code>、<code>preview_todo_list</code></td>
+</tr>
+<tr>
+<td>查看依据</td>
+<td>用户点击某条要求的“出处”</td>
+<td>Matter + 目标类型/ID</td>
+<td>原文片段；无依据标系统建议</td>
+</tr>
+<tr>
+<td>准备清单</td>
+<td>解析完成后生成待办</td>
+<td>Matter + 已勾选材料</td>
+<td><code>todo_list</code>、<code>missing_items</code>、<code>summary</code></td>
+</tr>
+</tbody>
+</table>
+<h3>4.7.3 Function Calling 执行流程</h3>
+<pre><code>用户清单/操作
+  → 判断是否需要工具（有截止时间/有补充通知）
+  → 模型返回 tool_calls（name + arguments）
+  → 代码执行 check_date / compare
+  → 工具结果以 role=tool 回传模型
+  → 模型生成建议
+  → 写入 date_check / suggestions / tool_trace
+  → 前端展示“真实调用结果”
+</code></pre>
+<p>没有 Key 时不会假装“模型调用了工具”，而是走同一套工具执行轨迹：真实执行 <code>check_date</code>，返回 <code>tool_calls</code> 和 <code>date_check</code>，只是不做模型总结。这样演示的是“工具真的执行了”，不是“模型说它调用了”。</p>
+<h3>4.7.4 为什么不用 MCP</h3>
+<p>比赛评分里 MCP / Function Calling 是同一类“工具集成”能力。本项目选择 <strong>Function Calling</strong>，原因是：</p>
+<ul>
+<li>部署简单：不需要额外 MCP Server、进程和协议适配；</li>
+<li>工具数量少（日期、对比、依据），Function Calling 足够；</li>
+<li>本地可降级：无 Key 时仍能执行工具；</li>
+<li>后续可扩展：把 <code>check_date</code> 换成 MCP Server 只需替换工具执行层，不影响 Prompt 和前端。</li>
+</ul>
+<h3>4.7.5 失败与可观测性</h3>
+<ul>
+<li>工具参数非法：返回统一错误，不把异常抛给前端；</li>
+<li>模型不调用工具：代码层补一次 <code>check_date</code>，保证至少有一次真实执行；</li>
+<li>模型调用未知工具：返回“未知工具”，不执行；</li>
+<li>每次调用记录 <code>tool_trace</code>（工具名、参数、结果），前端/答辩可展示真实轨迹。</li>
+</ul>
+<h2>4.8 补充通知变化处理（A 实现）</h2>
+<h3>4.8.1 差异类型</h3>
+<p>两份通知分别解析为 Matter A / B，对比：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>判定</th>
+<th>输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>改期</td>
+<td>两边都有 <code>due_at</code> 且不同</td>
+<td><code>changed</code> + 旧/新时间</td>
+</tr>
+<tr>
+<td>新增材料</td>
+<td>B 有、A 没有（名称归一化后）</td>
+<td><code>added</code> + 新材料</td>
+</tr>
+<tr>
+<td>删除材料</td>
+<td>A 有、B 没有</td>
+<td><code>removed</code>；未明确“不再要求”时必须确认</td>
+</tr>
+<tr>
+<td>材料类型变化</td>
+<td>必填/可选发生变化</td>
+<td><code>changed</code></td>
+</tr>
+<tr>
+<td>新增/删除步骤</td>
+<td>步骤标题归一化后对比</td>
+<td><code>added</code> / <code>removed</code></td>
+</tr>
+<tr>
+<td>补充通知没提</td>
+<td>某一类字段在 B 中缺失</td>
+<td><code>info</code>，保留原值，不误删</td>
+</tr>
+</tbody>
+</table>
+<h3>4.8.2 什么时候必须让用户确认</h3>
+<ul>
+<li>补充通知没有写“以此为准 / 以本通知为准 / 原通知作废 / 替代原通知”，但截止时间冲突；</li>
+<li>补充通知没有明确写“取消 / 不再要求 / 无需提交”，但原材料不再出现；</li>
+<li>两份通知标题/事项明显不一致（人工判断）。</li>
+</ul>
+<p>明确写了“以此为准”时，改期不再重复问“哪份有效”；但保存新清单前仍要用户点一次“确认更新”，这是写操作确认，不是歧义确认。</p>
+<h3>4.8.3 受影响待办与版本</h3>
+<pre><code>原 Matter A + 补充 Matter B
+  → diff（截止/材料/步骤）
+  → affected_todos（新增/删除/更新截止/保留）
+  → preview_todo_list（只预览，不写）
+  → 用户确认
+  → apply：更新 Matter + change_log.before + version+1
+  → 未确认：applied=false，原清单不变
+</code></pre>
+<p><code>change_log.before</code> 保留修改前的 <code>deadline/materials/step_list/todo_list</code>，支持回看；准备清单每次确认保存后版本递增，保留最近 5 版历史。</p>
+<h2>4.9 AI 安全与可控性</h2>
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>具体表现</th>
+<th>措施</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>幻觉</td>
+<td>编造材料、截止时间、办理地点</td>
+<td><code>source_ref</code> + <code>is_suggestion</code> + 无依据拒答 + Schema 校验</td>
+</tr>
+<tr>
+<td>提示词注入</td>
+<td>通知正文里写“忽略以上规则”</td>
+<td>System Prompt 优先、只输出 JSON、代码层字段裁剪，不执行正文指令</td>
+</tr>
+<tr>
+<td>误操作</td>
+<td>自动删材料、覆盖用户清单</td>
+<td>写操作必须用户确认；未确认 <code>applied=false</code>；保留 <code>change_log</code></td>
+</tr>
+<tr>
+<td>密钥泄露</td>
+<td>Key 进入前端/仓库</td>
+<td>Key 只在后端 <code>.env</code>；<code>.gitignore</code>；前端不接触</td>
+</tr>
+<tr>
+<td>文件滥用</td>
+<td>超大文件、非法格式</td>
+<td>图片 ≤5MB、PDF ≤10MB/≤30页、材料库扩展名白名单</td>
+</tr>
+<tr>
+<td>跨会话串数据</td>
+<td>两个用户互相看到文件/清单</td>
+<td><code>X-Session-Id</code> 隔离；删除接口；不对外提供跨会话查询</td>
+</tr>
+<tr>
+<td>模型/网络故障</td>
+<td>页面白屏、请求无响应</td>
+<td>视觉→OCR→Mock 降级；统一错误信封；前端重试/提示</td>
+</tr>
+<tr>
+<td>输出注入</td>
+<td>模型输出 HTML/脚本</td>
+<td>前端 <code>esc()</code> 转义；只渲染白名单字段</td>
+</tr>
+</tbody>
+</table>
+<h2>4.10 效果评估与优化策略</h2>
+<h3>4.10.1 评估方法</h3>
+<ul>
+<li><strong>字段级</strong>：标题、截止时间、材料、步骤、待办分别比对原文，统计准确率/召回率；</li>
+<li><strong>引用级</strong>：回答中的每条依据是否真的出现在对应片段；</li>
+<li><strong>拒答级</strong>：材料外问题是否被正确拒绝；</li>
+<li><strong>工程级</strong>：P50/P95 耗时、首 token 时间、错误率、降级触发率；</li>
+<li><strong>成本级</strong>：prompt/completion token、单次解析费用、100 次演示预算。</li>
+</ul>
+<h3>4.10.2 当前基线</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>9 套后端自测</td>
+<td>全部通过（C 侧记录）</td>
+</tr>
+<tr>
+<td>A 侧 78 项确定性检查</td>
+<td>78/78</td>
+</tr>
+<tr>
+<td>Mock 性能（100 次）</td>
+<td>平均约 10–14ms，P95 约 17ms</td>
+</tr>
+<tr>
+<td>真实 DeepSeek 文本/视觉/工具调用</td>
+<td>⏳ 团队 Key 未配置，待补</td>
+</tr>
+</tbody>
+</table>
+<h3>4.10.3 优化策略</h3>
+<ol>
+<li><strong>Prompt 消融</strong>：对比“只给字段说明”和“字段说明 + few-shot + 反例”，看 Schema 通过率和字段准确率；</li>
+<li><strong>模型对比</strong>：同一批通知比较 DeepSeek / 通义 / Moonshot 的 JSON 稳定性、中文抽取、价格；</li>
+<li><strong>检索参数</strong>：调整 chunk_size / overlap / top_k / 阈值，观察出处命中率与拒答率；</li>
+<li><strong>规则兜底</strong>：统计模型漏字段/空 action 的比例，决定是否增加代码修补；</li>
+<li><strong>降级演练</strong>：断 Key、断网、坏图、扫描 PDF 各跑一次，确保不白屏。</li>
+</ol>
+<h2>5. 核心功能实现（后端）</h2>
+<h3>5.1 统一入口与统一管道</h3>
+<ul>
+<li><code>main.py</code> 负责 CORS、参数校验（空文本 / 超长 10000 字）、multipart 大小与格式校验、统一 <code>{success,data,error}</code> 响应和异常兜底；</li>
+<li><code>analysis_pipeline.analyze_with_fallback</code> 负责“真实模型 / 离线 Mock”切换，文本、PDF、图片三条入口共用；</li>
+<li>所有接口始终 HTTP 200，前端只判断 <code>success</code>，避免 422/500 直接把页面打崩。</li>
+</ul>
+<h3>5.2 文字通知 → Matter</h3>
+<p>输入一段通知文字，先注入 <code>NOW</code>，走 System Prompt + JSON Schema；输出 <code>title/deadline/materials/step_list/todo_list/sources</code>，再经过复杂度重算、字段裁剪、空字段修补和 <code>missing_items</code> 重建。失败时返回统一错误，不返回半截 JSON。</p>
+<h3>5.3 缺项核对与准备清单</h3>
+<p>用户勾选材料、填写自述后，<code>/api/check</code> 做确定性差集，输出 <code>missing_required / missing_optional / unchecked_unspecified / need_confirm / profile_issues</code>。<code>/api/prepare-list</code> 把 Matter 转成可执行待办，支持保存、读取、修改、版本历史和导出。每次确认保存 <code>version</code> 递增，<code>previous_todo_list</code> 与最近 5 版 <code>history</code> 留档。</p>
+<h3>5.4 查看依据</h3>
+<p><code>/api/evidence</code> 接收 Matter + 目标类型/ID，返回 <code>source_ref.quote</code>；没有引用的条目标 <code>is_suggestion=true</code>。前端以弹窗展示原文，黄色标签区分“系统建议”。这让“模型说的”与“通知原文写的”在界面上可区分。</p>
+<h3>5.5 材料库与 RAG 追问</h3>
+<p><code>/api/files</code> 上传 TXT/MD/PDF，切片并编号；<code>/api/files/search</code> 做词法检索；<code>/api/ask</code> 先检索再回答，附文件名、片段号、页码；检索为空时明确拒答。无 Key 时直接返回最相关原文与出处，不让页面卡死。</p>
+<h3>5.6 补充通知对比与确认</h3>
+<p><code>/api/compare</code> 分别解析两份通知并保留文件名/原文/Matter，返回截止、材料、步骤差异和受影响待办。前端展示原要求/新要求/变化；未确认时只预览，确认后才写入新清单，并保留 <code>change_log.before</code>。</p>
+<h3>5.7 日期核对与导出</h3>
+<p><code>/api/tools/check-date</code> 返回星期、距今、周末、常见法定节假日与“是否工作日”，调休提示人工确认；<code>/api/prepare-list/{id}/export</code> 支持 CSV（UTF-8 BOM，Excel 打开不乱码）与 Markdown。日期工具也被 AI 以 Function Calling 方式调用，结果写入 <code>date_check</code> / <code>suggestions</code> / <code>tool_trace</code>。</p>
+<h3>5.8 会话隔离、限流与删除</h3>
+<p>前端通过 <code>X-Session-Id</code> 区分浏览器会话，文件库、准备清单、通知对比互不可见；三类数据均提供删除接口。真实模型模式默认按 IP + 路径限流（普通 60 次/分钟、上传 10 次/分钟），Key 只从环境变量读取，不进入仓库。</p>
+<h2>6. 测试与部署</h2>
+<h3>6.1 测试策略</h3>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>目标</th>
+<th>方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>确定性单元测试</td>
+<td>规则、模式、日期、对比、检索、Prompt 契约</td>
+<td><code>src/test_compare_date.py</code>（78 项，无 Key）</td>
+</tr>
+<tr>
+<td>接口集成测试</td>
+<td>参数校验、错误信封、上传限制、会话隔离、限流</td>
+<td><code>backend/smoke_test_*.py</code>（9 套）</td>
+</tr>
+<tr>
+<td>端到端验收</td>
+<td>三档模式、截图、PDF、缺项、依据、追问</td>
+<td><code>smoke_test_acceptance.py</code> + 演示数据包</td>
+</tr>
+<tr>
+<td>演示前自检</td>
+<td>健康检查到核心链路一键跑通</td>
+<td><code>backend/preflight.py</code>（13 项）</td>
+</tr>
+<tr>
+<td>真实模型评测</td>
+<td>字段准确率、引用准确率、耗时、费用</td>
+<td>⏳ 团队 DeepSeek Key 到位后补</td>
+</tr>
+</tbody>
+</table>
+<h3>6.2 自动化测试结果</h3>
+<table>
+<thead>
+<tr>
+<th>脚本</th>
+<th>项数</th>
+<th>覆盖</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>smoke_test.py</code></td>
+<td>10</td>
+<td>健康检查、正常/空/超长文本、非法 JSON、CORS、Mock 性能</td>
+</tr>
+<tr>
+<td><code>smoke_test_check.py</code></td>
+<td>10</td>
+<td>缺项差集、全勾选、自述冲突、参数兜底</td>
+</tr>
+<tr>
+<td><code>smoke_test_prepare.py</code></td>
+<td>11</td>
+<td>生成、保存、读取、修改内容持久化</td>
+</tr>
+<tr>
+<td><code>smoke_test_evidence.py</code></td>
+<td>8</td>
+<td>索引、单条依据、无依据 → 建议、参数校验</td>
+</tr>
+<tr>
+<td><code>smoke_test_image.py</code></td>
+<td>6</td>
+<td>limits、合法图、格式/大小/空文件</td>
+</tr>
+<tr>
+<td><code>smoke_test_pdf.py</code></td>
+<td>6</td>
+<td>文字型 PDF、扫描件、页数/大小限制</td>
+</tr>
+<tr>
+<td><code>smoke_test_files.py</code></td>
+<td>10</td>
+<td>上传、片段编号、检索、追问、材料外拒答</td>
+</tr>
+<tr>
+<td><code>smoke_test_acceptance.py</code></td>
+<td>3 样本</td>
+<td>三档模式端到端验收</td>
+</tr>
+<tr>
+<td><code>smoke_test_hardening.py</code></td>
+<td>16</td>
+<td>双通知、版本历史、导出、日期、会话隔离、删除</td>
+</tr>
+<tr>
+<td><code>preflight.py</code></td>
+<td>13</td>
+<td>演示前一键自检（含 10/28–10/30 新链路）</td>
+</tr>
+<tr>
+<td><code>src/test_compare_date.py</code></td>
+<td>78</td>
+<td>补充通知、日期、模式裁剪、检索、Prompt 契约（A 侧）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>当前结果来自 Mock + 本地 OCR；真实 DeepSeek 模型的 token/耗时/费用尚未产生，不能把 Mock 数据当成真实模型效果。</p>
+</blockquote>
+<h3>6.3 真实模型评测计划</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>记录项</th>
+<th>完成条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文本解析</td>
+<td>3 个样本的字段准确率、耗时、prompt/completion tokens、费用</td>
+<td>团队 DeepSeek Key 配置后</td>
+</tr>
+<tr>
+<td>视觉识别</td>
+<td>截图材料/日期/金额识别率、<code>confirmation_needed</code> 命中率</td>
+<td>确认 DeepSeek Key 是否支持图片输入</td>
+</tr>
+<tr>
+<td>RAG 追问</td>
+<td>出处命中率、拒答正确率、回答耗时</td>
+<td>上传演示材料后跑 5 个问题</td>
+</tr>
+<tr>
+<td>工具调用</td>
+<td><code>check_date</code> 是否被模型调用、参数正确率、轨迹完整性</td>
+<td>真实 Function Calling 一次完整记录</td>
+</tr>
+<tr>
+<td>降级</td>
+<td>断 Key / 断网 / 坏图 / 扫描 PDF 的页面表现</td>
+<td>演示前演练</td>
+</tr>
+</tbody>
+</table>
+<h3>6.4 部署</h3>
+<ul>
+<li>本地：<code>uvicorn</code> + <code>vite</code>，Mock 模式无需 Key；</li>
+<li>Docker：<code>backend/Dockerfile</code>（含 pypdf、RapidOCR）+ <code>docker-compose.yml</code>，<code>backend/data</code> volume 持久化，内置 HEALTHCHECK；</li>
+<li>反向代理：Nginx + HTTPS，<code>proxy_read_timeout 180s</code>、<code>client_max_body_size 12m</code>；</li>
+<li>可选公网：Render Blueprint（<code>render.yaml</code>），免费实例冷启动/临时磁盘需注意；</li>
+<li>详见 <code>docs/部署说明.md</code>。</li>
+</ul>
+<h3>6.5 安全与运维</h3>
+<ul>
+<li>Key 只在后端环境变量，<code>.env</code> 不入库；</li>
+<li>真实模式默认限流（普通 60 次/分钟、上传 10 次/分钟），Mock 模式默认不拦；</li>
+<li>文件、清单、对比记录按 <code>X-Session-Id</code> 隔离，支持删除；</li>
+<li>统一错误信封，不把堆栈/Key 返回前端；</li>
+<li>演示前跑 <code>preflight.py</code>，检查 <code>/health</code> 的 <code>mock/real</code> 状态。</li>
+</ul>
+<hr />
+<h2>7. 创新点</h2>
+<h3>7.1 技术创新</h3>
+<ol>
+<li><strong>公式化复杂度判定 + 字段裁剪</strong>：不让模型"凭感觉"给分，服务端用固定公式重算 complexity_score，并按模式强制裁剪字段，保证同一份通知的输出稳定、可复现。</li>
+<li><strong>三档结构自适应</strong>：simple / standard / complex 按需输出，前端只渲染 <code>enabled_sections</code> 中声明的区块，避免"简单通知给一堆空模块"。</li>
+<li><strong>全链路降级</strong>：视觉大模型不可用 → 本地 OCR（RapidOCR）→ 离线 Mock；文本模型不可用 → 离线抽取。演示与前端联调不会因为 Key/网络中断而白屏。</li>
+<li><strong>可解释与防幻觉</strong>：字段级 <code>source_ref</code> + "查看依据"接口；无原文依据的条目标为"系统建议"；材料库检索不到时直接回答"未找到依据"，不编造。</li>
+<li><strong>受控 Agent + Function Calling</strong>：模型负责选择工具，代码执行 <code>check_date</code>/对比，用户确认写操作；工具轨迹可展示，避免全自动 Agent 的误操作风险。</li>
+<li><strong>补充通知的“预览—确认—留档”</strong>：差异先预览，改期/删材料默认确认，确认后写新版本并保留 <code>change_log.before</code>，解决“通知改版把旧清单冲掉”的痛点。</li>
+</ol>
+<h3>7.2 应用创新</h3>
+<ol>
+<li><strong>从"读通知"到"能执行"</strong>：输出不是一段摘要，而是可勾选的材料清单、可排序的步骤、可提醒的 DDL。</li>
+<li><strong>用户情况驱动的缺项核对</strong>：把"通知要求"和"用户已有"做差集，直接告诉用户还缺什么、什么需要确认。</li>
+<li><strong>材料库 + 追问</strong>：上传多份材料后可以问"视频有什么要求"，答案附文件名与片段编号，形成"办事资料助手"。</li>
+<li><strong>通知改版管理</strong>：同一事项多版通知不需要用户自己对照，系统直接列出改期、新增材料、受影响待办。</li>
+</ol>
+<h3>7.3 交互创新</h3>
+<ul>
+<li><strong>出处弹窗</strong>：点击材料/步骤/待办后的“出处”，直接看原文片段；没有依据的标黄色“系统建议”，不把 AI 补充伪装成原文。</li>
+<li><strong>差异预览</strong>：补充通知先展示“原要求 / 新要求 / 变化 / 受影响待办”，用户确认后才覆盖，避免“静默修改”。</li>
+<li><strong>日期卡片 + 工具轨迹</strong>：显示剩余天数、星期、周末/节假日提示，并能在答辩中展示 <code>tool_trace</code>，证明工具真实执行。</li>
+<li><strong>材料库追问</strong>：回答下方展示文件名、片段编号、匹配度，用户可以判断“这句话是从哪份材料来的”。</li>
+</ul>
+<h3>7.4 与普通 AI 总结的对比</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>普通 AI 总结</th>
+<th>本项目</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输出形态</td>
+<td>一段自然语言</td>
+<td>结构化 Matter + 可勾选清单 + 待办</td>
+</tr>
+<tr>
+<td>可核验</td>
+<td>难以确认哪句话来自原文</td>
+<td>每条要求带 <code>source_ref</code>，可点开看依据</td>
+</tr>
+<tr>
+<td>可执行</td>
+<td>用户还要自己整理</td>
+<td>材料勾选、缺项核对、DDL、导出</td>
+</tr>
+<tr>
+<td>多模态</td>
+<td>多数只支持文字</td>
+<td>文字 + 截图 + 文字型 PDF</td>
+</tr>
+<tr>
+<td>通知改版</td>
+<td>重新总结，旧清单丢失</td>
+<td>差异对比 + 用户确认 + 版本历史</td>
+</tr>
+<tr>
+<td>失败表现</td>
+<td>模型挂了就空白</td>
+<td>视觉→OCR→Mock 降级，错误可读</td>
+</tr>
+<tr>
+<td>工具能力</td>
+<td>只能聊天</td>
+<td>Function Calling 调日期工具，结果回写</td>
+</tr>
+</tbody>
+</table>
+<h2>8. 总结与展望</h2>
+<h3>8.1 已完成</h3>
+<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 78 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
+<h3>8.2 局限</h3>
+<p>团队正式 Key（计划 DeepSeek）尚未配置，当前文本走 Mock、截图走本地 OCR；开发阶段 A 使用个人 Key（非团队 Key）做过联调，但不作为团队验收数据；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
+<h3>8.3 社会价值与商业潜力</h3>
+<p><strong>社会价值</strong>：</p>
+<ul>
+<li>降低“办事信息差”：学生、老年人、第一次办事的人不需要反复研究公文，减少漏交材料、错过截止时间；</li>
+<li>减少返工：缺项核对和原文依据让用户一次准备齐，不用来回问辅导员/ HR；</li>
+<li>可解释 AI：每条结论能回到原文，减少“AI 说的对不对”的信任成本。</li>
+</ul>
+<p><strong>商业潜力</strong>：</p>
+<ul>
+<li><strong>B2C 订阅/按次</strong>：个人用户免费基础解析，高级功能（批量材料库、导出、提醒）订阅；</li>
+<li><strong>B2B SaaS</strong>：学校学工/教务、企业 HR/行政、社团管理平台，按坐席或调用量收费；</li>
+<li><strong>私有化/API</strong>：把“通知→Matter+清单”能力封装成 API，接入现有的办事大厅/OA；</li>
+<li><strong>成本优势</strong>：支持 DeepSeek 等性价比模型，且无 Key 时可用 Mock/本地 OCR 降级，部署成本可控；</li>
+<li><strong>数据边界</strong>：不接校务/政务系统、不自动提交表单，降低合规风险，适合先从“信息整理工具”切入。</li>
+</ul>
+<h3>8.4 展望</h3>
+<p>多文件合并解析、复杂条件分支（“若为应届生需额外提交…”）、向量检索与重排、日历/飞书同步、多人协作清单、移动端 App。</p>
+<hr />
+<h2>附录</h2>
+<h3>A.1 运行命令</h3>
+<pre><code class="language-powershell">cd backend
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd ..\frontend
+npm run dev
+
+# 重新生成技术文档 HTML + PDF（A 修改 4.1/4.2 后运行）
+powershell -ExecutionPolicy Bypass -File ..\scripts\build_tech_pdf.ps1
+</code></pre>
+<h3>A.2 环境变量</h3>
+<table>
+<thead>
+<tr>
+<th>变量</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LLM_ENABLE_MOCK</code></td>
+<td>无 Key 时是否走离线 Mock</td>
+</tr>
+<tr>
+<td><code>LLM_API_KEY</code> / <code>LLM_BASE_URL</code> / <code>LLM_MODEL</code></td>
+<td>文本模型</td>
+</tr>
+<tr>
+<td><code>TEAM_LLM_API_KEY</code> / <code>TEAM_LLM_BASE_URL</code> / <code>TEAM_LLM_MODEL</code></td>
+<td>视觉模型（截图）</td>
+</tr>
+<tr>
+<td><code>MAX_TEXT_LENGTH</code></td>
+<td>文本长度上限（默认 3000，演示配 10000）</td>
+</tr>
+<tr>
+<td><code>RATE_LIMIT_PER_MINUTE</code></td>
+<td>普通模型接口每分钟限额（默认 60）</td>
+</tr>
+<tr>
+<td><code>UPLOAD_RATE_LIMIT_PER_MINUTE</code></td>
+<td>上传接口每分钟限额（默认 10）</td>
+</tr>
+<tr>
+<td><code>RATE_LIMIT_ENFORCE_IN_MOCK</code></td>
+<td>Mock 模式是否强制限流（默认 0）</td>
+</tr>
+<tr>
+<td><code>X-Session-Id</code></td>
+<td>前端请求头，用于用户数据隔离（不是登录鉴权）</td>
+</tr>
+</tbody>
+</table>
+<h3>A.3 测试结果</h3>
+<table>
+<thead>
+<tr>
+<th>脚本</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>9 套自测（接口/缺项/清单/依据/图片/PDF/文件/追问/加固）</td>
+<td>全部通过</td>
+</tr>
+<tr>
+<td>A 侧 <code>src/test_compare_date.py</code></td>
+<td>78/78（补充通知/日期/模式/检索/Prompt 契约）</td>
+</tr>
+<tr>
+<td><code>smoke_test_acceptance.py</code></td>
+<td>simple / standard / complex 3/3</td>
+</tr>
+<tr>
+<td><code>preflight.py</code></td>
+<td>13/13，可开始演示</td>
+</tr>
+<tr>
+<td><code>smoke_test_hardening.py</code></td>
+<td>16/16</td>
+</tr>
+<tr>
+<td><code>smoke_test_perf.py</code>（Mock 100 次）</td>
+<td>平均约 10–14ms，P95 约 17ms</td>
+</tr>
+<tr>
+<td><code>docs/技术文档.pdf</code></td>
+<td>已重新导出 25 页最终版（≤30 页），含 4.1/4.2</td>
+</tr>
+</tbody>
+</table>
+<h3>A.4 评分维度与文档对应</h3>
+<table>
+<thead>
+<tr>
+<th>评分维度</th>
+<th>权重</th>
+<th>本文对应章节</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI 技术深度</td>
+<td>35%</td>
+<td>4.1–4.10、6.2、7.1</td>
+<td>模型选型、Prompt、RAG、多模态、缺项判断、工具调用、安全、评估</td>
+</tr>
+<tr>
+<td>创新性</td>
+<td>25%</td>
+<td>7.1–7.4</td>
+<td>公式化模式、受控 Agent、补充通知确认、交互创新</td>
+</tr>
+<tr>
+<td>前端工程质量</td>
+<td>10%</td>
+<td>由 B 的前端说明/截图补充</td>
+<td>本文不展开组件与性能细节</td>
+</tr>
+<tr>
+<td>实用性</td>
+<td>10%</td>
+<td>1.3、5.1–5.8、7.4</td>
+<td>真实场景、与传统/通用 AI 对比</td>
+</tr>
+<tr>
+<td>用户体验</td>
+<td>10%</td>
+<td>7.3 + B 的界面截图/流程图</td>
+<td>出处弹窗、差异预览、错误提示</td>
+</tr>
+<tr>
+<td>社会价值与商业潜力</td>
+<td>10%</td>
+<td>8.3</td>
+<td>信息差、返工、B2C/B2B/API</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

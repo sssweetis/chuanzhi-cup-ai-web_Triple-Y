@@ -1,9 +1,12 @@
 # src/service.py
+import copy
 import logging
 import json
+import math
 import uuid
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Set, Optional, Union
 from notification_extractor import (
     LLMClient,
@@ -12,8 +15,17 @@ from notification_extractor import (
     extract_pdf_pages_and_text,
     chunk_document_text,
     chunk_document_pages,
+    TZ,
 )
-from prompt import SYSTEM_PROMPT, QA_PROMPT, UPDATE_PROMPT, IMAGE_CHECK_RULES, RAG_QA_PROMPT
+from prompt import (
+    SYSTEM_PROMPT,
+    QA_PROMPT,
+    UPDATE_PROMPT,
+    IMAGE_CHECK_RULES,
+    RAG_QA_PROMPT,
+    COMPARE_PROMPT,
+    DATE_TOOL_SYSTEM_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
 _extractor = None
@@ -799,3 +811,937 @@ def ask_question(
         matter_json=matter_json,
         top_k=3,
     )
+
+
+# ==================== 10.29：补充通知对比 + 变更联动待办 ====================
+
+# 补充通知里出现这些词，说明它明确覆盖原通知；
+# 没有这些词时，改期 / 删材料一律要求用户确认，避免“默默改掉”用户清单。
+_AUTHORITATIVE_PATTERNS = (
+    "以此为准", "以本通知为准", "以补充通知为准", "以最新通知为准",
+    "原通知作废", "替代原通知", "取代原通知", "本通知为最终版本",
+    "如有冲突，以本通知为准", "如有不一致，以本通知为准",
+)
+
+# 只有明确写了这些词，才允许直接删除原材料/步骤。
+_CANCEL_PATTERNS = (
+    "取消", "不再要求", "无需提交", "不需要提交", "不需要", "删除",
+    "不再提交", "不再提供", "免交", "无需提供",
+)
+
+_WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+
+
+def _parse_datetime(value: Any, default_tz=timezone(timedelta(hours=8))) -> Optional[datetime]:
+    """把 ISO / 常见中文日期字符串解析为带时区的 datetime。"""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip().replace("Z", "+00:00")
+        text = text.replace("年", "-").replace("月", "-").replace("日", " ")
+        text = re.sub(r"\s+", " ", text).strip()
+        dt = None
+        for fmt in (
+            None, "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",
+            "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y/%m/%d",
+        ):
+            try:
+                dt = datetime.fromisoformat(text) if fmt is None else datetime.strptime(text, fmt)
+                break
+            except (ValueError, TypeError):
+                continue
+        if dt is None:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=default_tz)
+    return dt.astimezone(default_tz)
+
+
+def _format_datetime(dt: Optional[datetime]) -> str:
+    if not dt:
+        return ""
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _format_due(value: Any) -> str:
+    return _format_datetime(_parse_datetime(value)) or str(value or "")
+
+
+def _norm_name(name: Any) -> str:
+    """材料/步骤名称归一化：去书名号、括号注解、标点和空白，便于跨通知匹配。"""
+    text = str(name or "").strip()
+    text = re.sub(r"[（(][^（）()]*[）)]", "", text)      # 去掉“（附件1）”这类注解
+    text = re.sub(r"[《》【】\[\]（）()]", "", text)
+    text = re.sub(r"[\s：:，,。；;、·•\-—_]+", "", text)
+    return text.lower()
+
+
+def _material_name(material: Dict[str, Any]) -> str:
+    return str(
+        material.get("material_name")
+        or material.get("name")
+        or material.get("title")
+        or "未命名材料"
+    )
+
+
+def _material_key(material: Dict[str, Any]) -> str:
+    key = _norm_name(_material_name(material))
+    return key or str(material.get("material_id") or "")
+
+
+def _step_key(step: Dict[str, Any]) -> str:
+    key = _norm_name(step.get("title"))
+    return key or str(step.get("step_id") or "")
+
+
+def _index_by_key(items: List[Dict[str, Any]], key_func) -> Dict[str, Dict[str, Any]]:
+    result: Dict[str, Dict[str, Any]] = {}
+    for i, item in enumerate(items or []):
+        if not isinstance(item, dict):
+            continue
+        key = key_func(item)
+        if key in result:
+            key = f"{key}#{i}"
+        result[key] = item
+    return result
+
+
+def _has_any(text: str, patterns) -> bool:
+    return any(p in (text or "") for p in patterns)
+
+
+def _requirements_from_matter(matter: Dict[str, Any]) -> List[str]:
+    """把 Matter 压缩成前端好展示的“要求列表”。"""
+    matter = matter or {}
+    requirements: List[str] = []
+    due = (matter.get("deadline") or {}).get("due_at")
+    if due:
+        requirements.append(f"截止时间：{_format_due(due)}")
+    for material in matter.get("materials") or []:
+        if isinstance(material, dict):
+            requirements.append(f"材料：{_material_name(material)}")
+    for step in matter.get("step_list") or []:
+        if isinstance(step, dict) and step.get("title"):
+            requirements.append(f"步骤：{step.get('title')}")
+    for point in matter.get("key_points") or []:
+        if isinstance(point, str) and point.strip():
+            requirements.append(f"要点：{point.strip()}")
+    return requirements
+
+
+def _build_notice_diff(
+    original_matter: Dict[str, Any],
+    supplement_matter: Dict[str, Any],
+    original_text: str = "",
+    supplement_text: str = "",
+) -> Dict[str, Any]:
+    """代码层对比：稳定、可解释，作为 LLM 对比的兜底与校验基线。"""
+    original_matter = original_matter or {}
+    supplement_matter = supplement_matter or {}
+
+    authoritative = _has_any(supplement_text, _AUTHORITATIVE_PATTERNS)
+    cancel_explicit = _has_any(supplement_text, _CANCEL_PATTERNS)
+
+    old_deadline = copy.deepcopy(original_matter.get("deadline") or {})
+    new_deadline = copy.deepcopy(supplement_matter.get("deadline") or {})
+    old_due = old_deadline.get("due_at")
+    new_due = new_deadline.get("due_at")
+    # 补充通知没提截止时间 ≠ 取消截止时间：只有两边都给了时间且不同，才算改期。
+    deadline_changed = bool(old_due and new_due and _format_due(old_due) != _format_due(new_due))
+
+    old_materials = [m for m in (original_matter.get("materials") or []) if isinstance(m, dict)]
+    new_materials = [m for m in (supplement_matter.get("materials") or []) if isinstance(m, dict)]
+    old_map = _index_by_key(old_materials, _material_key)
+    new_map = _index_by_key(new_materials, _material_key)
+
+    added_material_keys = [k for k in new_map if k not in old_map]
+    removed_material_keys = [k for k in old_map if k not in new_map]
+    changed_material_keys = [
+        k for k in new_map
+        if k in old_map and (new_map[k].get("material_type") or "") != (old_map[k].get("material_type") or "")
+    ]
+
+    old_steps = [s for s in (original_matter.get("step_list") or []) if isinstance(s, dict)]
+    new_steps = [s for s in (supplement_matter.get("step_list") or []) if isinstance(s, dict)]
+    old_step_map = _index_by_key(old_steps, _step_key)
+    new_step_map = _index_by_key(new_steps, _step_key)
+    added_step_keys = [k for k in new_step_map if k not in old_step_map]
+    removed_step_keys = [k for k in old_step_map if k not in new_step_map]
+
+    changes: List[Dict[str, Any]] = []
+    confirmations: List[str] = []
+
+    def add_change(type_: str, field: str, text: str, old=None, new=None):
+        item = {"type": type_, "field": field, "text": text}
+        if old not in (None, "", [], {}):
+            item["old"] = old
+        if new not in (None, "", [], {}):
+            item["new"] = new
+        changes.append(item)
+
+    # 1) 截止时间
+    if deadline_changed:
+        old_text = _format_due(old_due) or "未提及"
+        new_text = _format_due(new_due) or "未提及"
+        add_change(
+            "changed", "deadline",
+            f"截止时间由 {old_text} 变更为 {new_text}",
+            old=old_text, new=new_text,
+        )
+        if old_due and new_due and not authoritative:
+            confirmations.append(
+                f"补充通知未明确说明是否替代原截止时间（原：{old_text}，新：{new_text}），"
+                f"请确认以哪个为准。"
+            )
+    elif new_due and not old_due:
+        add_change("added", "deadline", f"新增截止时间：{_format_due(new_due)}", new=_format_due(new_due))
+    elif old_due and not new_due:
+        add_change(
+            "info", "deadline",
+            f"补充通知未提及截止时间，保留原截止时间 {_format_due(old_due)}",
+            old=_format_due(old_due),
+        )
+
+    # 2) 材料
+    if old_materials and not new_materials:
+        # 补充通知可能只改时间，没有重复列材料；不能把“没重复”当成“全取消”。
+        add_change("info", "material", "补充通知未重新列材料，保留原材料清单")
+        removed_material_keys = []
+    for key in added_material_keys:
+        material = new_map[key]
+        add_change("added", "material", f"新增材料：{_material_name(material)}", new=_material_name(material))
+    for key in removed_material_keys:
+        material = old_map[key]
+        add_change("removed", "material", f"不再出现材料：{_material_name(material)}", old=_material_name(material))
+        if not cancel_explicit:
+            confirmations.append(
+                f"补充通知未明确说明是否取消材料《{_material_name(material)}》，"
+                f"请确认是否还需要提交。"
+            )
+    for key in changed_material_keys:
+        old_type = old_map[key].get("material_type") or "unspecified"
+        new_type = new_map[key].get("material_type") or "unspecified"
+        add_change(
+            "changed", "material",
+            f"材料《{_material_name(new_map[key])}》类型由 {old_type} 变为 {new_type}",
+            old=old_type, new=new_type,
+        )
+
+    # 3) 步骤
+    if old_steps and not new_steps:
+        add_change("info", "step", "补充通知未重新列步骤，保留原步骤")
+        removed_step_keys = []
+    for key in added_step_keys:
+        step = new_step_map[key]
+        add_change("added", "step", f"新增步骤：{step.get('title')}", new=step.get("title"))
+    for key in removed_step_keys:
+        step = old_step_map[key]
+        add_change("removed", "step", f"删除步骤：{step.get('title')}", old=step.get("title"))
+        if not cancel_explicit:
+            confirmations.append(
+                f"补充通知未明确说明是否取消步骤「{step.get('title')}」，请确认。"
+            )
+
+    # 4) 把变化映射到待办
+    removed_material_ids = {
+        str(old_map[k].get("material_id"))
+        for k in removed_material_keys if old_map[k].get("material_id")
+    }
+    removed_material_names = [_material_name(old_map[k]) for k in removed_material_keys]
+    removed_name_norms = {_norm_name(n) for n in removed_material_names}
+
+    affected_todos: List[str] = []
+    affected_details: List[Dict[str, Any]] = []
+    preview_todos: List[Dict[str, Any]] = []
+    used_todo_ids = {
+        str(t.get("todo_id")) for t in (original_matter.get("todo_list") or []) if isinstance(t, dict)
+    }
+
+    for todo in (original_matter.get("todo_list") or []):
+        if not isinstance(todo, dict):
+            continue
+        item = copy.deepcopy(todo)
+        action = str(item.get("action") or "")
+        mid = str(item.get("material_id") or "")
+        hit_removed = bool(mid and mid in removed_material_ids) or any(
+            n and n in _norm_name(action) for n in removed_name_norms
+        )
+
+        if hit_removed:
+            reason = "补充通知中不再要求该材料/步骤"
+            detail = {
+                "todo_id": item.get("todo_id"),
+                "action": action,
+                "change": "remove",
+                "reason": reason,
+            }
+            affected_details.append(detail)
+            if cancel_explicit:
+                affected_todos.append(f"删除待办：{action}（{reason}）")
+                continue     # 明确取消，预览里直接不出现
+            item["change"] = "remove"
+            item["needs_confirmation"] = True
+            affected_todos.append(f"需确认是否删除待办：{action}")
+            preview_todos.append(item)
+            continue
+
+        if deadline_changed and new_due:
+            item["due_at"] = new_due
+            item["change"] = "update_deadline"
+            detail = {
+                "todo_id": item.get("todo_id"),
+                "action": action,
+                "change": "update_deadline",
+                "old_due_at": old_due,
+                "new_due_at": new_due,
+            }
+            affected_details.append(detail)
+            affected_todos.append(
+                f"更新截止：{action} → {_format_due(new_due)}"
+            )
+        else:
+            item["change"] = "keep"
+        preview_todos.append(item)
+
+    # 5) 新增材料 → 自动生成待办
+    for i, key in enumerate(added_material_keys, 1):
+        material = new_map[key]
+        name = _material_name(material)
+        todo_id = f"todo_new_{i}"
+        while todo_id in used_todo_ids:
+            todo_id = f"{todo_id}_new"
+        used_todo_ids.add(todo_id)
+        action = f"准备{name}"
+        new_todo = {
+            "todo_id": todo_id,
+            "action": action,
+            "status": "pending",
+            "material_id": material.get("material_id") or f"mat_new_{i}",
+            "source_ref": material.get("source_ref") or {},
+            "change": "add",
+        }
+        if deadline_changed and new_due:
+            new_todo["due_at"] = new_due
+        preview_todos.append(new_todo)
+        affected_todos.append(f"新增待办：{action}")
+        affected_details.append({
+            "todo_id": todo_id,
+            "action": action,
+            "change": "add",
+            "material_name": name,
+        })
+
+    # 去重但保持顺序
+    confirmations = list(dict.fromkeys([c for c in confirmations if c]))
+    affected_todos = list(dict.fromkeys(affected_todos))
+
+    return {
+        "old_requirements": _requirements_from_matter(original_matter),
+        "new_requirements": _requirements_from_matter(supplement_matter),
+        "changes": changes,
+        "confirmation_needed": confirmations,
+        "reasoning": (
+            "补充通知明确说明以此为准，冲突按补充通知处理。"
+            if authoritative else
+            "补充通知未明确说明以此为准，涉及改期/删材料时保留用户确认。"
+        ),
+        "authoritative": authoritative,
+        "old_deadline": old_deadline,
+        "new_deadline": new_deadline,
+        "added_materials": [new_map[k] for k in added_material_keys],
+        "removed_materials": [old_map[k] for k in removed_material_keys],
+        "changed_materials": [
+            {"old": old_map[k], "new": new_map[k]} for k in changed_material_keys
+        ],
+        "added_steps": [new_step_map[k] for k in added_step_keys],
+        "removed_steps": [old_step_map[k] for k in removed_step_keys],
+        "affected_todos": affected_todos,
+        "affected_todo_details": affected_details,
+        "preview_todo_list": preview_todos,
+        "requires_confirmation": bool(confirmations),
+    }
+
+
+def _compare_with_llm(
+    original_text: str,
+    supplement_text: str,
+    rule_diff: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """有 Key 时用 LLM 补充语义差异；失败返回 None，由规则差异兜底。"""
+    try:
+        extractor = _get_extractor()
+        llm = extractor.llm
+        if not getattr(llm, "api_key", ""):
+            return None
+        prompt = (
+            COMPARE_PROMPT
+            .replace("{{ORIGINAL_TEXT}}", original_text or "")
+            .replace("{{SUPPLEMENT_TEXT}}", supplement_text or "")
+            .replace("{{RULE_DIFF}}", json.dumps(rule_diff, ensure_ascii=False))
+        )
+        content = _call_chat(
+            llm=llm,
+            prompt_text=prompt,
+            system_content="你是严谨的补充通知对比引擎，只输出 JSON，禁止编造原文没有的信息。",
+            use_stream=False,
+            json_mode=True,
+        )
+        content = (content or "").strip()
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?|```$", "", content, flags=re.MULTILINE).strip()
+        parsed = json.loads(content)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as e:
+        logger.warning("LLM 补充通知对比失败，使用规则差异兜底：%s", e)
+        return None
+
+
+def compare_notifications(
+    original_text: str,
+    supplement_text: str,
+    original_matter: Optional[Dict[str, Any]] = None,
+    supplement_matter: Optional[Dict[str, Any]] = None,
+    use_llm: bool = True,
+) -> Dict[str, Any]:
+    """
+    10.29 任务：比较原通知与补充通知，找出新增材料、改期或冲突，
+    并把变化关联到用户已有的待办（affected_todos）。
+    """
+    if not original_matter:
+        original_res = analyze_notification(original_text)
+        if not original_res.get("success"):
+            return {"success": False, "data": None, "error": f"原通知解析失败：{original_res.get('error')}"}
+        original_matter = original_res["data"]
+    if not supplement_matter:
+        supplement_res = analyze_notification(supplement_text)
+        if not supplement_res.get("success"):
+            return {"success": False, "data": None, "error": f"补充通知解析失败：{supplement_res.get('error')}"}
+        supplement_matter = supplement_res["data"]
+
+    diff = _build_notice_diff(original_matter, supplement_matter, original_text, supplement_text)
+    compare_mode = "rules"
+
+    if use_llm:
+        ai_diff = _compare_with_llm(original_text, supplement_text, diff)
+        if isinstance(ai_diff, dict):
+            seen = {(c.get("type"), c.get("text")) for c in diff["changes"] if isinstance(c, dict)}
+            for change in ai_diff.get("changes") or []:
+                if not isinstance(change, dict) or not change.get("text"):
+                    continue
+                key = (change.get("type"), change.get("text"))
+                if key not in seen:
+                    change["source"] = "llm"
+                    diff["changes"].append(change)
+                    seen.add(key)
+            for item in ai_diff.get("confirmation_needed") or []:
+                if item and str(item) not in diff["confirmation_needed"]:
+                    diff["confirmation_needed"].append(str(item))
+            if ai_diff.get("reasoning"):
+                diff["reasoning"] = ai_diff["reasoning"]
+            diff["requires_confirmation"] = bool(diff["confirmation_needed"])
+            compare_mode = "llm+rules"
+
+    return {
+        "success": True,
+        "data": {
+            "original_matter": original_matter,
+            "supplement_matter": supplement_matter,
+            "diff": diff,
+            "preview_todo_list": diff["preview_todo_list"],
+            "requires_confirmation": diff["requires_confirmation"],
+            "confirmation_needed": diff["confirmation_needed"],
+            "compare_mode": compare_mode,
+        },
+        "error": None,
+    }
+
+
+def apply_notice_changes(
+    original_matter: Dict[str, Any],
+    diff: Dict[str, Any],
+    confirmed: bool = False,
+) -> Dict[str, Any]:
+    """
+    10.29 任务：用户确认后才更新清单；未确认时只返回预览与待确认项，
+    并把修改前的 deadline / materials / todos 存进 change_log，支持回看。
+    """
+    diff = diff or {}
+    requires_confirmation = bool(diff.get("requires_confirmation"))
+    # 不管有没有歧义，保存前都必须由用户点一次“确认更新”；
+    # requires_confirmation 只表示“还需要额外确认哪份有效”。
+    if not confirmed:
+        return {
+            "success": True,
+            "data": {
+                "applied": False,
+                "requires_user_confirmation": True,
+                "requires_confirmation": requires_confirmation,
+                "confirmation_needed": diff.get("confirmation_needed") or [],
+                "diff": diff,
+                "todo_list": diff.get("preview_todo_list") or [],
+                "matter": copy.deepcopy(original_matter),
+            },
+            "error": None,
+        }
+
+    updated = copy.deepcopy(original_matter or {})
+    updated_at = datetime.now(TZ).isoformat()
+    before = {
+        "deadline": copy.deepcopy(updated.get("deadline")),
+        "materials": copy.deepcopy(updated.get("materials") or []),
+        "step_list": copy.deepcopy(updated.get("step_list") or []),
+        "todo_list": copy.deepcopy(updated.get("todo_list") or []),
+    }
+
+    # 1) 截止时间
+    new_deadline = diff.get("new_deadline") or {}
+    if new_deadline.get("due_at"):
+        updated["deadline"] = copy.deepcopy(new_deadline)
+
+    # 2) 材料
+    removed_keys = {_material_key(m) for m in diff.get("removed_materials") or [] if isinstance(m, dict)}
+    removed_ids = {str(m.get("material_id")) for m in diff.get("removed_materials") or [] if m.get("material_id")}
+    materials = [
+        m for m in (updated.get("materials") or [])
+        if isinstance(m, dict)
+        and _material_key(m) not in removed_keys
+        and str(m.get("material_id") or "") not in removed_ids
+    ]
+    for material in diff.get("added_materials") or []:
+        if isinstance(material, dict):
+            new_material = copy.deepcopy(material)
+            if not new_material.get("material_id"):
+                new_material["material_id"] = f"mat_new_{len(materials) + 1}"
+            materials.append(new_material)
+    changed_by_key = {
+        _material_key(item["new"]): item["new"]
+        for item in (diff.get("changed_materials") or [])
+        if isinstance(item, dict) and isinstance(item.get("new"), dict)
+    }
+    for i, material in enumerate(materials):
+        key = _material_key(material)
+        if key in changed_by_key:
+            merged = copy.deepcopy(material)
+            merged.update(changed_by_key[key])
+            materials[i] = merged
+    updated["materials"] = materials
+
+    # 3) 步骤
+    removed_step_keys = {_step_key(s) for s in diff.get("removed_steps") or [] if isinstance(s, dict)}
+    steps = [
+        s for s in (updated.get("step_list") or [])
+        if isinstance(s, dict) and _step_key(s) not in removed_step_keys
+    ]
+    for step in diff.get("added_steps") or []:
+        if isinstance(step, dict):
+            steps.append(copy.deepcopy(step))
+    updated["step_list"] = steps
+
+    # 4) 待办：用 preview 覆盖，但清掉仅用于预览的标记
+    preview = diff.get("preview_todo_list")
+    if isinstance(preview, list):
+        todos = []
+        for todo in preview:
+            if not isinstance(todo, dict):
+                continue
+            if todo.get("change") == "remove":
+                continue      # 用户确认后，被取消材料的待办才真正删除
+            item = copy.deepcopy(todo)
+            for key in ("change", "needs_confirmation", "reason"):
+                item.pop(key, None)
+            todos.append(item)
+        updated["todo_list"] = todos
+
+    updated["updated_at"] = updated_at
+    updated["change_log"] = {
+        "applied_at": updated_at,
+        "confirmed": True,
+        "source": "supplement",
+        "before": before,
+        "summary": diff.get("changes") or [],
+        "confirmation_needed": diff.get("confirmation_needed") or [],
+    }
+
+    return {
+        "success": True,
+        "data": {
+            "applied": True,
+            "requires_user_confirmation": False,
+            "requires_confirmation": False,
+            "matter": updated,
+            "todo_list": updated.get("todo_list") or [],
+            "change_log": updated["change_log"],
+            "diff": diff,
+        },
+        "error": None,
+    }
+
+
+def update_from_supplement(
+    original_text: str,
+    supplement_text: str,
+    original_matter: Optional[Dict[str, Any]] = None,
+    supplement_matter: Optional[Dict[str, Any]] = None,
+    confirmed: bool = False,
+    use_llm: bool = True,
+) -> Dict[str, Any]:
+    """10.29 一站式入口：对比 → 生成受影响待办 → 用户确认后应用。"""
+    compared = compare_notifications(
+        original_text=original_text,
+        supplement_text=supplement_text,
+        original_matter=original_matter,
+        supplement_matter=supplement_matter,
+        use_llm=use_llm,
+    )
+    if not compared.get("success"):
+        return compared
+
+    data = compared["data"]
+    applied = apply_notice_changes(
+        data["original_matter"],
+        data["diff"],
+        confirmed=confirmed,
+    )
+    if not applied.get("success"):
+        return applied
+
+    merged = {
+        "diff": data["diff"],
+        "compare_mode": data["compare_mode"],
+        "supplement_matter": data["supplement_matter"],
+        **applied["data"],
+    }
+    return {"success": True, "data": merged, "error": None}
+
+
+# ==================== 10.30：日期核对工具（Function Calling） ====================
+
+DATE_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "check_date",
+        "description": "核对截止时间是否已过、距今还有多久、是否周末，并给出建议完成时间",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "due_at": {
+                    "type": "string",
+                    "description": "截止时间，ISO 8601 格式，例如 2026-11-08T18:00:00+08:00",
+                },
+                "now": {
+                    "type": "string",
+                    "description": "当前时间，可省略；省略时使用服务器当前时间",
+                },
+            },
+            "required": ["due_at"],
+        },
+    },
+}
+
+
+def check_date(due_at: Any, now: Any = None) -> Dict[str, Any]:
+    """
+    10.30 日期核对工具本体：不依赖大模型、不联网，输入截止时间即可核对。
+    C 侧后续可以把它单独暴露成 /api/check-date；A 侧先保证 AI 能真实调用。
+    """
+    due = _parse_datetime(due_at)
+    if not due:
+        return {
+            "success": False,
+            "error": f"无法识别的截止时间：{due_at}",
+            "due_at": str(due_at or ""),
+        }
+
+    now_dt = _parse_datetime(now) if now else datetime.now(TZ)
+    if not now_dt:
+        now_dt = datetime.now(TZ)
+
+    delta = due - now_dt
+    total_seconds = delta.total_seconds()
+    is_expired = total_seconds < 0
+    days_left = max(0, int(total_seconds // 86400))
+    hours_left = max(0, int(total_seconds // 3600))
+    weekday = _WEEKDAY_CN[due.weekday()]
+    is_weekend = due.weekday() >= 5
+
+    if is_expired or hours_left < 24:
+        risk_level = "high"
+    elif days_left < 3:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    # 建议完成时间：默认提前 2 天；遇到周末就往前挪到最近的工作日 18:00。
+    suggested_finish = None
+    if not is_expired:
+        suggested_finish = due - timedelta(days=2)
+        while suggested_finish.weekday() >= 5:
+            suggested_finish -= timedelta(days=1)
+        suggested_finish = suggested_finish.replace(hour=18, minute=0, second=0, microsecond=0)
+        if suggested_finish <= now_dt:
+            suggested_finish = now_dt + timedelta(hours=2)
+
+    if is_expired:
+        overdue_days = abs(int(total_seconds // 86400))
+        suggestion = (
+            f"截止时间已过 {overdue_days} 天，请先联系对方确认是否还能补交，"
+            f"再决定是否继续准备。"
+        )
+    elif is_weekend:
+        suggestion = (
+            f"截止日 {due.strftime('%m月%d日')} 是{weekday}，"
+            f"建议在 {suggested_finish.strftime('%m月%d日')}（{_WEEKDAY_CN[suggested_finish.weekday()]}）"
+            f"18:00 前提交，避免周末无人审核。"
+        )
+    elif days_left < 1:
+        suggestion = "距截止不足 1 天，建议今天完成并提交，不要再等。"
+    else:
+        suggestion = (
+            f"距截止还有 {days_left} 天，建议最晚 "
+            f"{suggested_finish.strftime('%m月%d日')}（{_WEEKDAY_CN[suggested_finish.weekday()]}）"
+            f"18:00 前完成并提交。"
+        )
+
+    return {
+        "success": True,
+        "due_at": _format_datetime(due),
+        "now": _format_datetime(now_dt),
+        "days_left": days_left,
+        "hours_left": hours_left,
+        "is_expired": is_expired,
+        "weekday": weekday,
+        "is_weekend": is_weekend,
+        "risk_level": risk_level,
+        "suggested_finish_at": _format_datetime(suggested_finish) if suggested_finish else "",
+        "suggestion": suggestion,
+        "checks": [
+            f"截止时间：{_format_datetime(due)}",
+            f"当前时间：{_format_datetime(now_dt)}",
+            f"剩余：{days_left} 天（约 {hours_left} 小时）",
+            f"星期：{weekday}（{'周末' if is_weekend else '工作日'}）",
+        ],
+        "error": None,
+        "tool": "check_date",
+        "tool_version": "1.0",
+    }
+
+
+def _apply_date_result(
+    matter: Dict[str, Any],
+    trace: List[Dict[str, Any]],
+    result: Dict[str, Any],
+    extra_suggestions: Optional[List[str]] = None,
+    mode: str = "local",
+) -> Dict[str, Any]:
+    """把工具返回结果写回 Matter，并生成可展示的建议与风险提示。"""
+    matter = copy.deepcopy(matter or {})
+    matter["date_check"] = result
+    matter["tool_trace"] = trace
+
+    suggestions: List[str] = []
+    if result.get("success"):
+        suggestions.append(result.get("suggestion") or "")
+        if result.get("risk_level") == "high" and not result.get("is_expired"):
+            suggestions.append("风险较高：建议把该事项设为最高优先级，今天就处理。")
+        if result.get("is_expired"):
+            suggestions.append("如果对方允许补交，建议今天先提交已有材料，再补缺项。")
+        if result.get("days_left", 0) >= 2:
+            suggestions.append("建议在截止前 2 天再核对一次材料，避免遗漏。")
+    for item in extra_suggestions or []:
+        if item and item not in suggestions:
+            suggestions.append(item)
+
+    existing = [s for s in (matter.get("suggestions") or []) if isinstance(s, str)]
+    for item in suggestions:
+        if item and item not in existing:
+            existing.append(item)
+    matter["suggestions"] = existing
+
+    # 日期风险写进 warning_list，前端已有预警面板可直接展示
+    warnings = [
+        w for w in (matter.get("warning_list") or [])
+        if isinstance(w, dict) and w.get("warning_type") != "date_risk"
+    ]
+    if result.get("success") and result.get("risk_level") in ("high", "medium"):
+        deadline_source = (matter.get("deadline") or {}).get("source_ref") or {}
+        if not isinstance(deadline_source, dict):
+            deadline_source = {}
+        warnings.append({
+            "warning_id": f"warn_date_{uuid.uuid4().hex[:6]}",
+            "warning_type": "date_risk",
+            "severity": "high" if result.get("risk_level") == "high" else "medium",
+            "message": result.get("suggestion") or "截止时间较紧，请尽快处理",
+            "source_ref": {"quote": deadline_source.get("quote", "")},
+        })
+    matter["warning_list"] = warnings
+
+    return {
+        "success": True,
+        "data": matter,
+        "tool_calls": trace,
+        "mode": mode,
+        "error": None,
+    }
+
+
+def _execute_date_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    if name != "check_date":
+        return {"success": False, "error": f"未知工具：{name}"}
+    allowed = {k: v for k, v in (arguments or {}).items() if k in ("due_at", "now")}
+    return check_date(**allowed)
+
+
+def _llm_date_tool_loop(
+    matter: Dict[str, Any],
+    llm,
+    now: Any = None,
+    client=None,
+) -> Dict[str, Any]:
+    """真实 Function Calling 循环：模型发起 check_date → 本地执行 → 模型总结。
+
+    client 仅用于测试注入；生产环境不传，内部再创建 OpenAI 客户端。
+    """
+    if client is None:
+        from openai import OpenAI
+        client = OpenAI(api_key=llm.api_key, base_url=llm.base_url, timeout=llm.timeout)
+    due = (matter.get("deadline") or {}).get("due_at")
+    messages = [
+        {"role": "system", "content": DATE_TOOL_SYSTEM_PROMPT.replace("{{NOW}}", _format_datetime(_parse_datetime(now) or datetime.now(TZ)))},
+        {
+            "role": "user",
+            "content": "当前清单如下，请核对截止时间并给出建议：\n" + json.dumps(matter, ensure_ascii=False),
+        },
+    ]
+
+    first = client.chat.completions.create(
+        model=llm.model,
+        messages=messages,
+        tools=[DATE_TOOL_SCHEMA],
+        tool_choice="auto",
+        temperature=0,
+    )
+    message = first.choices[0].message
+    tool_calls = getattr(message, "tool_calls", None) or []
+    trace: List[Dict[str, Any]] = []
+    local_result = None
+
+    if tool_calls:
+        assistant_tool_calls = []
+        for call in tool_calls:
+            name = call.function.name
+            try:
+                args = json.loads(call.function.arguments or "{}")
+            except Exception:
+                args = {"due_at": due}
+            assistant_tool_calls.append({
+                "id": call.id,
+                "type": "function",
+                "function": {"name": name, "arguments": call.function.arguments or "{}"},
+            })
+            result = _execute_date_tool(name, args)
+            if name == "check_date" and result.get("success"):
+                local_result = result
+            trace.append({
+                "step": len(trace) + 1,
+                "tool": name,
+                "call_id": call.id,
+                "arguments": args,
+                "result": result,
+            })
+        messages.append({
+            "role": "assistant",
+            "content": getattr(message, "content", "") or "",
+            "tool_calls": assistant_tool_calls,
+        })
+        for item in trace:
+            messages.append({
+                "role": "tool",
+                "tool_call_id": item["call_id"],
+                "content": json.dumps(item["result"], ensure_ascii=False),
+            })
+        second = client.chat.completions.create(
+            model=llm.model,
+            messages=messages,
+            temperature=0,
+        )
+        content = (second.choices[0].message.content or "").strip()
+    else:
+        content = (getattr(message, "content", "") or "").strip()
+
+    if local_result is None:
+        local_result = check_date(due, now)
+        trace.append({
+            "step": len(trace) + 1,
+            "tool": "check_date",
+            "arguments": {"due_at": due, "now": now},
+            "result": local_result,
+        })
+
+    extra_suggestions: List[str] = []
+    if content:
+        text = re.sub(r"^```(?:json)?|```$", "", content, flags=re.MULTILINE).strip()
+        try:
+            parsed = json.loads(text)
+            extra_suggestions = [str(s) for s in (parsed.get("suggestions") or []) if s]
+        except Exception:
+            extra_suggestions = [line.strip(" -") for line in text.splitlines() if line.strip()]
+
+    return _apply_date_result(
+        matter,
+        trace,
+        local_result,
+        extra_suggestions=extra_suggestions,
+        mode="llm" if tool_calls else "llm_no_tool_call",
+    )
+
+
+def run_date_check_tool_loop(
+    matter_data: Dict[str, Any],
+    now: Any = None,
+    use_llm: bool = True,
+) -> Dict[str, Any]:
+    """
+    10.30 任务：让 AI 在需要时调用日期核对工具，并用返回结果生成建议。
+    无 Key 时走同一套工具调用轨迹（真实执行 check_date），只是不做模型总结；
+    配好 Key 后自动切换为 LLM Function Calling。
+    """
+    matter = copy.deepcopy(matter_data or {})
+    due = (matter.get("deadline") or {}).get("due_at")
+
+    if not due:
+        matter["date_check"] = {
+            "success": False,
+            "error": "清单中没有截止时间，未调用 check_date",
+        }
+        matter["tool_trace"] = []
+        matter["suggestions"] = list(matter.get("suggestions") or []) + [
+            "通知里没有明确截止时间，请手动补充后再核对。"
+        ]
+        return {
+            "success": True,
+            "data": matter,
+            "tool_calls": [],
+            "mode": "skipped",
+            "error": None,
+        }
+
+    if use_llm:
+        try:
+            extractor = _get_extractor()
+            llm = extractor.llm
+            if getattr(llm, "api_key", ""):
+                return _llm_date_tool_loop(matter, llm, now=now)
+        except Exception as e:
+            logger.warning("LLM 日期工具调用失败，回退本地工具：%s", e)
+
+    result = check_date(due, now)
+    trace = [{
+        "step": 1,
+        "tool": "check_date",
+        "arguments": {"due_at": due, "now": now},
+        "result": result,
+    }]
+    return _apply_date_result(matter, trace, result, mode="local")

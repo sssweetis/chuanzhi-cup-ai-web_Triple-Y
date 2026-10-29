@@ -1,0 +1,34 @@
+﻿# Render.com 一键部署（在线演示可选加分项）
+# 用法：Render → New → Blueprint → 连接本仓库；首次部署后在 Environment 里填 Key（sync: false 的变量需手动填）
+# 注意：免费实例磁盘是临时的，重新部署会清空 backend/data（演示够用）
+services:
+  - type: web
+    name: tripley-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_ENABLE_MOCK
+        value: "1"
+      - key: MAX_TEXT_LENGTH
+        value: "10000"
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      - key: TEAM_LLM_API_KEY
+        sync: false
+      - key: TEAM_LLM_BASE_URL
+        sync: false
+      - key: TEAM_LLM_MODEL
+        sync: false
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "60"
+      - key: UPLOAD_RATE_LIMIT_PER_MINUTE
+        value: "10"
+      - key: RATE_LIMIT_ENFORCE_IN_MOCK
+        value: "0"

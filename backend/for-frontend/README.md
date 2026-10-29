@@ -69,3 +69,28 @@ saveSession({ text, matter, checkedIds, profile });
 const s = loadSession();
 if (s) { textarea.value = s.text; renderMatter(s.matter); }
 ```
+
+## 10/28–10/31 新增接口（B 接入清单）
+
+`api.js` 已补充以下能力，直接复制到前端即可：
+
+| 函数 | 用途 |
+| --- | --- |
+| `getSessionId()` | 读取/生成本地稳定会话 ID；所有请求自动带 `X-Session-Id` |
+| `compareNotifications({left,right})` | 旧版/新版通知对比，返回截止、材料、步骤差异 |
+| `checkDate("2026-11-02")` | 星期、距今、周末/节假日、是否工作日 |
+| `savePrepareList(payload)` | 用户确认后保存；服务端自动保留历史版本 |
+| `loadPrepareListHistory(id)` | 读取最近 5 个修改前版本 |
+| `prepareListExportUrl(id,"csv")` | CSV / Markdown 下载地址（也支持 `format=md`） |
+| `uploadMaterial(file)` | 材料上传，自动带会话头 |
+| `deletePrepareList()` / `deleteFile()` / `deleteComparison()` | 删除当前会话的数据 |
+
+前端需要新增的 UI（B 负责）：
+
+1. **双通知对比区**：两个文件名/文本输入 + 对比按钮 + 截止/材料/步骤差异三栏。
+2. **日期提示**：截止时间旁显示“还剩 N 天 / 撞周末或节假日”。
+3. **导出按钮**：准备清单右侧提供“导出 CSV”“导出 Markdown”。
+4. **会话初始化**：页面启动时调用一次 `getSessionId()`，之后刷新不更换。
+5. **删除入口**：文件库、准备清单、对比记录列表提供删除按钮。
+
+注意：`X-Session-Id` 只用于隔离演示数据，不是登录鉴权；不要把它写进 README 或公开日志。

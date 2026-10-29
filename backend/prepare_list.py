@@ -29,12 +29,45 @@ def _action_for(material):
     return action
 
 
-def build_prepare_list(matter, checked_material_ids=None):
+def _grade_level(profile):
+    profile = profile or {}
+    for key in ("grade", "grade_level", "student_type", "year"):
+        value = str(profile.get(key) or "").strip().lower()
+        if not value:
+            continue
+        if "大一" in value or "freshman" in value or value in ("1", "一"):
+            return 1
+        if "大二" in value or "sophomore" in value or value in ("2", "二"):
+            return 2
+        if "大三" in value or "junior" in value or value in ("3", "三"):
+            return 3
+        if "大四" in value or "senior" in value or value in ("4", "四"):
+            return 4
+        if "研究生" in value or "硕士" in value or "博士" in value or "graduate" in value:
+            return 5
+    return None
+
+
+def _condition_status(condition, profile):
+    text = "".join(str(condition or "").split())
+    if not text:
+        return True
+    level = _grade_level(profile)
+    if level is None:
+        return None
+    if "大一" in text or "新生" in text:
+        return level == 1
+    if "大二" in text or "及以上" in text:
+        return level >= 2
+    return None
+
+
+def build_prepare_list(matter, checked_material_ids=None, profile=None):
     matter = matter or {}
     checked = {str(x) for x in (checked_material_ids or [])}
     materials = [m for m in (matter.get("materials") or []) if isinstance(m, dict)]
 
-    missing_items, ready_items = [], []
+    missing_items, ready_items, need_confirm = [], [], []
     for m in materials:
         mid = str(m.get("material_id") or "")
         name = m.get("material_name") or "未命名材料"
@@ -43,7 +76,14 @@ def build_prepare_list(matter, checked_material_ids=None):
             "material_id": m.get("material_id"),
             "material_name": name,
             "material_type": m.get("material_type") or "unspecified",
+            "condition": m.get("condition"),
         }
+        condition_status = _condition_status(m.get("condition"), profile)
+        if condition_status is False:
+            continue
+        if condition_status is None and not is_checked:
+            need_confirm.append(item)
+            continue
         if is_checked:
             ready_items.append(item)
         elif (m.get("material_type") or "required") == "optional":
@@ -93,6 +133,11 @@ def build_prepare_list(matter, checked_material_ids=None):
     elif missing_items:
         summary = "还有 %d 项材料要准备：%s" % (
             len(missing_items), "、".join(i["material_name"] for i in missing_items[:4]))
+        if need_confirm:
+            summary += "；另有 %d 项条件材料需确认年级" % len(need_confirm)
+    elif need_confirm:
+        summary = "有 %d 项条件材料需确认年级：%s" % (
+            len(need_confirm), "、".join(i["material_name"] for i in need_confirm[:4]))
     else:
         summary = "材料已齐全，可以按清单逐项确认"
 
@@ -102,6 +147,7 @@ def build_prepare_list(matter, checked_material_ids=None):
         "todo_list": todos,
         "missing_items": missing_items,
         "ready_items": ready_items,
+        "need_confirm": need_confirm,
         "summary": summary,
     }
 

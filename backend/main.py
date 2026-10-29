@@ -317,6 +317,7 @@ class PrepareListRequest(BaseModel):
     matter: Optional[dict] = None
     text: Optional[str] = None
     checked_material_ids: Optional[List[str]] = None
+    profile: Optional[dict] = None
 
 
 class SavePrepareListRequest(BaseModel):
@@ -350,7 +351,7 @@ def prepare_list(req: PrepareListRequest):
     if error:
         return error
     try:
-        data = build_prepare_list(matter, req.checked_material_ids)
+        data = build_prepare_list(matter, req.checked_material_ids, req.profile)
     except Exception as e:
         logger.exception("生成准备清单失败：%s", e)
         return _fail(f"生成准备清单失败：{e}")

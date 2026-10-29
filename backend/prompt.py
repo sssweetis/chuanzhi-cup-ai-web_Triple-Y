@@ -30,6 +30,8 @@ NOW = {{NOW}}
 # 字段输出规则
 - schema_version: "1.0", id: "matter_auto", timezone: "Asia/Shanghai", status: "not_started"
 - **material_name 规则**：必须提炼为**简短的名词短语（2~10个字）**。
+- **material_type 规则**：原文出现“选填 / 可选 / 如有 / 自愿 / 非必须 / 不是必填”时，必须输出 `material_type: "optional"`，不能标成 required。
+- **condition 规则**：材料只适用于特定人群时（如大一新生、大二及以上、应届生、党员等），必须输出 `condition` 字段，值为简短条件（如“大一新生”“大二及以上”）；不要把同一个条件分支拆成两条都标 required。
 - **source_ref 与 建议标识**：
     - 原文明确写出的，`is_suggestion` 为 `false`，必须带 `source_ref.quote`。
     - AI 自己补充的建议，`is_suggestion` 为 `true`，`source_ref.quote` 可为空。
@@ -42,6 +44,7 @@ NOW = {{NOW}}
 - **todo_list = 具体动作**：粒度细，把每个可执行动作列出来，例如"导师签字"、"导出PDF"、"准备获奖证明"。
 - 判断标准：step 是"阶段"，todo 是"该阶段里的动作"。
 - **步骤 title 绝对不允许为空**，必须能从原文提炼出来。原始原文句子放入该 step 的 source_ref.quote。
+- **最终动作必须在最后**：原文的“线上报名 / 完成报名 / 提交报名 / 完成提交”属于最终动作，必须放在 step_list 最后，并依赖准备材料、初审、录制/上传视频等前置步骤；不要把它排到第一步。
 
 # 依赖判定与 ID 规则
 - step_id / material_id / todo_id 必须按顺序编号。

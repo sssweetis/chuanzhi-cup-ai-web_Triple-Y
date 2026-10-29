@@ -17,6 +17,9 @@ from notification_extractor import (
     chunk_document_pages,
     enforce_mode,
     enforce_enabled_sections,
+    normalize_material_metadata,
+    normalize_final_step_order,
+    normalize_todo_order,
     normalize_step_orders,
     TZ,
 )
@@ -54,6 +57,9 @@ def _apply_mode_guards(data: dict) -> dict:
         return data
     data = enforce_mode(data)
     data = enforce_enabled_sections(data)
+    data = normalize_material_metadata(data)
+    data = normalize_final_step_order(data)
+    data = normalize_todo_order(data)
     data = normalize_step_orders(data)
     return data
 

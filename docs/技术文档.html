@@ -1165,8 +1165,8 @@ score &gt; 0.6 → complex
 <td>全部通过（C 侧记录）</td>
 </tr>
 <tr>
-<td>A 侧 88 项确定性检查</td>
-<td>88/88</td>
+<td>A 侧 95 项确定性检查</td>
+<td>95/95</td>
 </tr>
 <tr>
 <td>Mock 性能（100 次）</td>
@@ -1237,7 +1237,7 @@ score &gt; 0.6 → complex
 <tr>
 <td>确定性单元测试</td>
 <td>规则、模式、日期、对比、检索、Prompt 契约</td>
-<td><code>src/test_compare_date.py</code>（88 项，无 Key）</td>
+<td><code>src/test_compare_date.py</code>（95 项，无 Key）</td>
 </tr>
 <tr>
 <td>接口集成测试</td>
@@ -1323,7 +1323,7 @@ score &gt; 0.6 → complex
 </tr>
 <tr>
 <td><code>src/test_compare_date.py</code></td>
-<td>88</td>
+<td>95</td>
 <td>补充通知、日期、模式裁剪、检索、Prompt 契约（A 侧）</td>
 </tr>
 </tbody>
@@ -1462,11 +1462,11 @@ score &gt; 0.6 → complex
 </tbody>
 </table>
 <blockquote>
-<p>同一段“校园创新挑战赛”通知的实测对比（豆包 / DeepSeek / Kimi / 不漏办）见 <a href="对比-普通大模型-vs-不漏办.md"><code>对比-普通大模型-vs-不漏办.md</code></a>。本次对比也暴露了条件材料、选填识别和步骤顺序的问题，已列入待修清单，不当作已完成能力宣传。</p>
+<p>同一段“校园创新挑战赛”通知的实测对比（豆包 / DeepSeek / Kimi / 不漏办）见 <a href="对比-普通大模型-vs-不漏办.md"><code>对比-普通大模型-vs-不漏办.md</code></a>。对比中暴露的条件材料、选填识别和最终步骤顺序已修复并复测；日期矛盾（下周三 vs 11/5 周四）仍列为 P1，不当作已完成能力宣传。</p>
 </blockquote>
 <h2>8. 总结与展望</h2>
 <h3>8.1 已完成</h3>
-<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 88 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
+<p>文字/截图/PDF 三种输入通道；三档结构化输出；材料清单与缺项核对；查看依据；材料库片段检索与追问；准备清单保存与恢复；双通知对比与变更确认；清单版本历史与 CSV/Markdown 导出；日期核对工具；会话隔离与删除；9 套自动化测试 + A 侧 95 项确定性检查 + 一键自检；Docker 部署方案与演示素材。</p>
 <h3>8.2 局限</h3>
 <p>团队 DeepSeek Flash 已完成首轮真实验收，控制台累计 70 次 / 214,613 tokens / ¥0.61；C 侧 <code>/api/compare</code> 已改为补充通知增量合并，06+07 复测通过；扫描版 PDF 依赖截图通道；复杂表格/手写体识别精度取决于模型；RAG 采用词法/二元组检索而非向量检索，同义改写可能漏召；补充通知对比的语义差异仍可能漏判；会话隔离基于 <code>X-Session-Id</code>，不是登录鉴权；节假日只覆盖常见固定假期，调休需人工确认；在线演示尚未部署。</p>
 <h3>8.3 社会价值与商业潜力</h3>
@@ -1555,7 +1555,7 @@ powershell -ExecutionPolicy Bypass -File ..\scripts\build_tech_pdf.ps1
 </tr>
 <tr>
 <td>A 侧 <code>src/test_compare_date.py</code></td>
-<td>88/88（补充通知/日期/模式/检索/Prompt 契约）</td>
+<td>95/95（补充通知/日期/模式/检索/Prompt 契约）</td>
 </tr>
 <tr>
 <td><code>smoke_test_acceptance.py</code></td>

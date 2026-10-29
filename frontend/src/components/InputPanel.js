@@ -19,6 +19,7 @@ export function renderInputPanel(mount) {
           <input type="file" id="fileInput" accept=".doc,.docx,.pdf" multiple hidden>
           <span class="date-pick">截止 <input type="date" id="taskDate"></span>
           <button class="tool" id="demoToggle" title="离线示例数据">示例</button>
+          <button class="tool" id="quickDemo" style="background:var(--accent);color:#fff;border:none">⚡ 一键体验</button>
         </div>
         <div class="in-bar-right">
           <span class="char-count" id="charCount">0 / 3000</span>
@@ -280,6 +281,11 @@ export function renderInputPanel(mount) {
   mount.querySelector('#demoToggle').onclick = () => {
     const row = mount.querySelector('#demoRow')
     row.style.display = row.style.display === 'none' ? 'flex' : 'none'
+  }
+  mount.querySelector('#quickDemo').onclick = () => {
+    mount.querySelector('#taskInput').value = '请于10月25日18:00前提交奖学金报名表和成绩单，材料审核由王老师负责，审核通过后10月30日前缴费100元，11月1日打印准考证。'
+    syncInput()
+    runAnalyze()
   }
   mount.querySelector('#taskInput').value = localStorage.getItem('zhiban-input') || ''
   function syncInput() {

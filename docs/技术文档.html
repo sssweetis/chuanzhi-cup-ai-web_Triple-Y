@@ -30,7 +30,7 @@
 <blockquote>
 <p>队伍：Triple Y ｜ 比赛：传智杯 AI WEB 网页开发挑战赛
 版本：v1.1 ｜ 日期：2026-10-29</p>
-<p>说明：本文由 C 汇总，A 编写第 4.1 / 4.2 节（模型选型、Prompt 设计）。当前为省赛提交版；未配置团队 Key，演示按 Mock + 本地 OCR 运行，真实模型记录待 Key 到位后补充。</p>
+<p>说明：本文由 C 汇总；第 4.1 / 4.2 节由 A 编写；4.4 多模态由 A 与 C 共同实现；4.5 RAG 由 A 实现、C 完成接口接入。当前为省赛提交版；未配置团队 Key，演示按 Mock + 本地 OCR 运行，真实模型记录待 Key 到位后补充。</p>
 </blockquote>
 <h2>目录</h2>
 <ol>
@@ -579,8 +579,9 @@ score &gt; 0.6 → complex
 <li><strong>Schema 校验</strong>：<code>jsonschema</code> 校验 Matter 结构，失败直接返回可读错误，不把脏数据交给前端。</li>
 <li><strong>三层降级</strong>：真实模型 → 本地 OCR（图片）→ 离线 Mock（无 Key），任一层可用即可演示。</li>
 </ol>
-<h2>4.4 多模态与 OCR（C 侧实现）</h2>
+<h2>4.4 多模态与 OCR（A + C 共同实现）</h2>
 <ul>
+<li><strong>分工</strong>：A 侧负责截图视觉抽取函数 <code>analyze_notification_from_image</code>、截图专用 Prompt 规则（表格/人数/日期/材料/金额）与 <code>confirmation_needed</code> 判定；C 侧负责 <code>/api/analyze-image</code> 接口、文件大小/格式校验、本地 RapidOCR 兜底与统一抽取管道。</li>
 <li><strong>截图</strong>：<code>POST /api/analyze-image</code>，multipart 字段 <code>image</code>，JPG/PNG/WEBP，≤5MB。
   有团队 Key 时调用 <code>analyze_notification_from_image</code>（多模态 + 截图专用规则：表格/人数/日期/材料/金额，模糊写入 <code>confirmation_needed</code>）；
   无 Key 或视觉调用失败时，自动用 <strong>RapidOCR（onnxruntime）</strong> 本地识别，再走统一抽取管道。</li>
@@ -588,8 +589,9 @@ score &gt; 0.6 → complex
   扫描版提取不到文字时返回"请改用清晰截图或直接粘贴文字"，避免空结果。</li>
 <li>统一限制端点：<code>/api/analyze-image/limits</code>、<code>/api/analyze-pdf/limits</code>，前端提示与后端完全一致。</li>
 </ul>
-<h2>4.5 RAG 与可解释性（C 侧实现）</h2>
+<h2>4.5 RAG 与可解释性（A 实现，C 接入）</h2>
 <ul>
+<li><strong>分工</strong>：A 侧实现 <code>NotificationRetriever</code> 检索器、中文二元组/LCS 打分、<code>ask_question_with_rag</code> 先检索后回答、<code>source_ref</code> / <code>is_suggestion</code> 溯源规则；C 侧负责材料上传与存储、<code>/api/files</code>、<code>/api/ask</code>、<code>/api/evidence</code> 接口接入。</li>
 <li><strong>片段编号</strong>：上传材料按 400 字 / 80 字重叠切分，生成 <code>file_xxx_c1</code>、<code>_c2</code>…，记录 <code>char_start/char_end</code>。</li>
 <li><strong>检索</strong>：<code>POST /api/files/search</code> 对片段做中文二元组重叠打分（命中片段 + 精确子串加权），返回文件名、片段号、原文、分数。</li>
 <li><strong>追问</strong>：<code>POST /api/ask</code> 先检索；有 Key 时把检索片段作为上下文交给 <code>ask_question</code>，无 Key 时直接返回最相关原文与出处。</li>

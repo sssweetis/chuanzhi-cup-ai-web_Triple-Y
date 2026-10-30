@@ -39,3 +39,6 @@ coverage/
 *.log
 logs/
 output_*.txt
+
+# ===== 省赛预提交本地打包文件（上传网盘，不进仓库） =====
+submission/*.zip

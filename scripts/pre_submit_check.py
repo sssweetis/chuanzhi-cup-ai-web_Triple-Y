@@ -20,6 +20,7 @@ REQUIRED = [
     "backend/.env.example", "backend/smoke_test_hardening.py", "frontend/package.json",
     "scripts/build_tech_pdf.ps1",
     "docs/技术文档.md", "docs/技术文档.html", "docs/技术文档.pdf", "docs/演示视频脚本.md",
+    "docs/作品介绍文档.md", "docs/作品介绍文档.pdf", "docs/预提交材料说明.md",
     "docs/部署说明.md", "docs/第三阶段测试用例.md", "docs/真实模型验收记录.md",
     "scripts/online_acceptance.ps1", "scripts/deploy-vps.sh",
     "docker-compose.prod.yml", "frontend/Dockerfile", "frontend/nginx.conf",
@@ -123,6 +124,9 @@ def main():
     print("  · docs/技术文档.md 的 4.1/4.2 已由 A 补完（检查最终 PDF 是否包含）")
     print("  · 演示视频是否已录（5–8 分钟、MP4、≥1080p）")
     print("  · 技术文档 PDF 是否已按最终版重新导出（当前 25 页，≤30 页）")
+    print("  · 省赛第 5 项：完整作品包是否已上传网盘，链接是否可访问")
+    print("  · 省赛第 6 项：作品介绍文档 PDF 是否已上传")
+    print("  · 省赛第 7 项：视频是否已传 B 站/抖音，链接是否可访问（不要填网盘）")
 
     print("\n" + "=" * 66)
     if problems:

@@ -128,7 +128,18 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_private_network=True,
 )
+
+
+
+@app.middleware("http")
+async def private_network_cors(request: Request, call_next):
+    """?? Chrome ? localhost -> ??? IP ? Private Network Access ???"""
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network", "").lower() == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
 
 
 # ==================== 会话隔离 / 限流 ====================

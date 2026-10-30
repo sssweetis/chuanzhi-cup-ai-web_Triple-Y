@@ -1,17 +1,14 @@
 // 极简全局状态：任务列表、用户、加载/错误态，变化后触发重渲染
 // 10/20：tasks / profile / 最近结果 持久化到 localStorage，刷新不丢
-const LS_KEY = 'zhiban-state-v1'
+const LS_KEY = 'zhiban-state-v2'
 
 function loadInitial() {
   const base = {
     profile: { account: 'triple', password: '', nick: 'Triple', color: '#8b86e8', avatarUrl: '' },
     tasks: [
-      { id: 1, title: '整理比赛测试通知（3 套）', date: '2026-10-20', done: false },
-      { id: 2, title: '提交比赛报名表 + 成绩单', date: '2026-10-25', done: false },
-      { id: 3, title: '缴纳报名费 100 元', date: '2026-10-30', done: false },
-      { id: 4, title: '打印准考证', date: '2026-11-01', done: false },
-      { id: 5, title: '现场答辩彩排', date: '2026-11-05', done: false },
-      { id: 6, title: '画出三个页面草图', date: '2026-10-15', done: true, doneAt: '2026-10-15' }
+      { id: 1, title: '示例任务 1：提交申报书', date: '2026-11-15', done: false },
+      { id: 2, title: '示例任务 2：缴纳评审费', date: '2026-11-20', done: false },
+      { id: 3, title: '示例任务 3：参加现场答辩', date: '2026-12-05', done: false }
     ],
     analyzing: false,
     analyzeError: '',

@@ -2,7 +2,7 @@
 // POST /api/check body = { matter: state.analyzeResult, profile:{people_count,has_doc,has_video,has_teacher_confirm}, checked_material_ids }
 // 后端返回 checked / missing_required / missing_optional / need_confirm / profile_issues / summary → 前端映射成三类
 import { state, setState } from '../state.js'
-import { checkProfile } from '../api.js'
+import { checkProfile } from '../api2.js'
 
 const FALLBACK_MATERIALS = [
   { id: 'm1', name: '作品演示视频（≤3 分钟）' },

@@ -227,7 +227,7 @@ export function renderTaskList(mount) {
 
   // 下载清单 CSV（服务端导出）
   mount.querySelector('#downloadList').onclick = async () => {
-    try { await (await import('../api.js')).exportTasks() }
+    try { await (await import('../api2.js')).exportTasks() }
     catch (e) { alert(e.message) }
   }
 }

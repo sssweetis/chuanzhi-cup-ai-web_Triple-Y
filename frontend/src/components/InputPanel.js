@@ -1,5 +1,5 @@
 import { state, setState } from '../state.js'
-import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate, compareNotifications, savePrepareList } from '../api.js'
+import { analyzeNotification, prepareList, analyzeImage, analyzePdf, uploadFile, listFiles, askQuestion, checkDate, compareNotifications, savePrepareList } from '../api2.js'
 import { renderMatter } from './ModeCard.js'
 import { SAMPLES } from '../mockMatters.js'
 
@@ -96,7 +96,7 @@ export function renderInputPanel(mount) {
       const qEl = mask.querySelector('#srcQuote')
       if (type && state.analyzeResult) {
         qEl.textContent = '加载中…'
-        import('../api.js').then(({ getEvidence }) =>
+        import('../api2.js').then(({ getEvidence }) =>
           getEvidence({ matter: state.analyzeResult, target_type: type, target_id: id })
             .then(res => {
               if (res && res.found) {

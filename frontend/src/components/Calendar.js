@@ -4,6 +4,12 @@ export function renderCalendar(mount) {
   const now = new Date()
   const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate()
   let view = { y: curY, m: curM }
+  // 自动跳到最早未完成任务所在月（每次渲染都执行，新任务加入后会自动切过去）
+  const upcoming = state.tasks.filter(t => !t.done && t.date).map(t => t.date).sort()
+  if (upcoming.length) {
+    const [y, m] = upcoming[0].split('-').map(Number)
+    view = { y, m: m - 1 }
+  }
 
   mount.innerHTML = `
     <div class="card">
@@ -39,11 +45,21 @@ export function renderCalendar(mount) {
       if (n < 0) overdue[t.date] = 1
       else if (n <= 2) hot[t.date] = 1
     })
-    // 按日期分组任务，做 hover 提示
     const byDate = {}
     state.tasks.forEach(t => {
       if (!byDate[t.date]) byDate[t.date] = []
       byDate[t.date].push(t.title)
+      // 子任务标题里解析日期（如 "12月5日答辩"）
+      if (Array.isArray(t.steps)) {
+        t.steps.forEach(s => {
+          const m = (s.title || '').match(/(\d{1,2})月(\d{1,2})日/)
+          if (m) {
+            const ds = `${view.y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`
+            if (!byDate[ds]) byDate[ds] = []
+            byDate[ds].push(s.title)
+          }
+        })
+      }
     })
     let cells = []
     for (let i = 0; i < first; i++) cells.push(`<td class="other blank">${prevDays - first + 1 + i}</td>`)

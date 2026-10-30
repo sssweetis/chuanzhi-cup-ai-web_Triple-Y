@@ -1,6 +1,6 @@
 // 后端联调：http://127.0.0.1:8000，CORS 已开，无需代理
 // 响应信封统一为 HTTP 200 + { success, data, error }，这里拆开返回 data / 抛 error
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://10.102.149.251:8000').replace(/\/+$/, '')
 const TIMEOUT = 90_000
 let SESSION_ID = localStorage.getItem('zhiban-session-id')
 if (!SESSION_ID) { SESSION_ID = 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); localStorage.setItem('zhiban-session-id', SESSION_ID) }

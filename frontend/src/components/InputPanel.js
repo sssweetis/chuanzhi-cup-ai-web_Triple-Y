@@ -146,6 +146,16 @@ export function renderInputPanel(mount) {
         if (!state.tasks.some(t => t.title === title)) {
           state.tasks.push({ id: Date.now(), title, date: due, done: false, sourceText: srcText })
         }
+        // 把 todo_list / step_list 每条也加进来，用各自的 due_at
+        const todos = (m && (m.todo_list || m.step_list)) || []
+        todos.forEach(t => {
+          const nm = t.action || t.title || t.name
+          if (!nm) return
+          const tDue = t.due_at ? String(t.due_at).slice(0, 10) : due
+          if (!state.tasks.some(x => x.title === nm)) {
+            state.tasks.push({ id: Date.now() + Math.random(), title: nm, date: tDue, done: t.status === 'completed', generated: true })
+          }
+        })
         setState({})
         toast('已加入任务清单')
       }

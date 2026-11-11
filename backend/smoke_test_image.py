@@ -9,6 +9,15 @@ results = []
 PASS, FAIL = "✅", "❌"
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -53,21 +62,21 @@ def main():
     data = r.get("data") or {}
     check("合法 PNG 返回完整 Matter 或明确错误",
           (r.get("success") is True and bool(data.get("title")))
-          or (r.get("success") is False and bool(r.get("error"))),
-          "success=%s title=%s error=%s" % (r.get("success"), data.get("title"), r.get("error")))
+          or (r.get("success") is False and bool(error_text(r))),
+          "success=%s title=%s error=%s" % (r.get("success"), data.get("title"), error_text(r)))
 
     r = upload("shot.txt", b"hello", "text/plain")
-    check("非法格式被拦截", r.get("success") is False and "仅支持" in (r.get("error") or ""), "error=%s" % r.get("error"))
+    check("非法格式被拦截", r.get("success") is False and "仅支持" in (error_text(r) or ""), "error=%s" % error_text(r))
 
     big = PNG_1PX + b"\0" * (5 * 1024 * 1024)
     r = upload("big.png", big, "image/png")
-    check("超过 5MB 被拦截", r.get("success") is False and "5 MB" in (r.get("error") or ""), "error=%s" % r.get("error"))
+    check("超过 5MB 被拦截", r.get("success") is False and "5 MB" in (error_text(r) or ""), "error=%s" % error_text(r))
 
     r = upload("empty.png", b"", "image/png")
-    check("空文件被拦截", r.get("success") is False and "为空" in (r.get("error") or ""), "error=%s" % r.get("error"))
+    check("空文件被拦截", r.get("success") is False and "为空" in (error_text(r) or ""), "error=%s" % error_text(r))
 
     r = upload(None, b"", "image/png")
-    check("没传 image 字段 → 统一信封", r.get("success") is False and bool(r.get("error")), "error=%s" % r.get("error"))
+    check("没传 image 字段 → 统一信封", r.get("success") is False and bool(error_text(r)), "error=%s" % error_text(r))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

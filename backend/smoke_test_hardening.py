@@ -44,6 +44,15 @@ def header(headers, name):
     return ""
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -75,7 +84,7 @@ def main():
           and "days_left" in (d2.get("data") or {}), str((d2.get("data") or {}).get("deadline_label")))
 
     _, _, bad_date = jcall("GET", "/api/tools/check-date?date=not-a-date")
-    check("日期核对：错误格式被拦截", bad_date.get("success") is False and bool(bad_date.get("error")))
+    check("日期核对：错误格式被拦截", bad_date.get("success") is False and bool(error_text(bad_date)))
 
     _, _, post_date = jcall("POST", "/api/tools/check-date", {
         "deadline": "2026-11-08T18:00:00+08:00",

@@ -33,6 +33,15 @@ def call(path, payload):
         return e.code, json.loads(e.read().decode("utf-8"))
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -92,13 +101,13 @@ def main():
 
     # 7) 参数兜底
     _, r7 = call("/api/check", {})
-    check("都不传 → 明确报错", r7.get("success") is False and bool(r7.get("error")), "error=%s" % r7.get("error"))
+    check("都不传 → 明确报错", r7.get("success") is False and bool(error_text(r7)), "error=%s" % error_text(r7))
 
     _, r8 = call("/api/check", {"matter": "not-a-dict"})
-    check("matter 类型不对 → 统一契约报错", r8.get("success") is False and bool(r8.get("error")), "error=%s" % r8.get("error"))
+    check("matter 类型不对 → 统一契约报错", r8.get("success") is False and bool(error_text(r8)), "error=%s" % error_text(r8))
 
     _, r9 = call("/api/check", {"text": "关于校园活动的通知内容。" * 1500})
-    check("超长 text 被拦截", r9.get("success") is False and "通知过长" in (r9.get("error") or ""), "error=%s" % r9.get("error"))
+    check("超长 text 被拦截", r9.get("success") is False and "通知过长" in (error_text(r9) or ""), "error=%s" % error_text(r9))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

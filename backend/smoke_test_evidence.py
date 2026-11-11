@@ -24,6 +24,15 @@ def call(method, path, payload=None):
             return {"success": False, "error": "HTTP %s" % e.code}
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -60,10 +69,10 @@ def main():
     check("没有来源 → 标为建议", d4.get("is_suggestion") is True and "建议" in (d4.get("note") or ""), "note=%s" % d4.get("note"))
 
     e5 = call("POST", "/api/evidence", {"matter": matter, "target_type": "bad_type", "target_id": "x"})
-    check("非法 target_type → 报错", e5.get("success") is False and bool(e5.get("error")), "error=%s" % e5.get("error"))
+    check("非法 target_type → 报错", e5.get("success") is False and bool(error_text(e5)), "error=%s" % error_text(e5))
 
     e6 = call("POST", "/api/evidence", {"target_type": "material", "target_id": "x"})
-    check("缺 matter → 报错", e6.get("success") is False and bool(e6.get("error")), "error=%s" % e6.get("error"))
+    check("缺 matter → 报错", e6.get("success") is False and bool(error_text(e6)), "error=%s" % error_text(e6))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

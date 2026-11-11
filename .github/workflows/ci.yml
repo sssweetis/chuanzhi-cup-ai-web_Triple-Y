@@ -1,0 +1,60 @@
+﻿name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      LLM_ENABLE_MOCK: "1"
+      LLM_API_KEY: ""
+      MAX_TEXT_LENGTH: "10000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Compile backend
+        run: python -m compileall -q backend
+      - name: Start backend
+        run: |
+          cd backend
+          python -m uvicorn main:app --host 127.0.0.1 --port 8000 > /tmp/tripley-uvicorn.log 2>&1 &
+          echo $! > /tmp/tripley-uvicorn.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health > /tmp/tripley-health.json; then break; fi
+            sleep 1
+          done
+          cat /tmp/tripley-health.json
+      - name: Run backend regressions
+        run: |
+          cd backend
+          python smoke_test_errors.py
+          python smoke_test.py
+          python smoke_test_check.py
+          python smoke_test_prepare.py
+          python smoke_test_evidence.py
+          python smoke_test_image.py
+          python smoke_test_pdf.py
+          python smoke_test_files.py
+          python smoke_test_acceptance.py
+          python smoke_test_hardening.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build

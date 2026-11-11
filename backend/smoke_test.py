@@ -36,6 +36,15 @@ def call(method, path, payload=None, headers=None, raw=None):
         return e.code, dict(e.headers), e.read().decode("utf-8"), (time.perf_counter() - t0) * 1000
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, passed, detail=""):
     results.append((name, passed))
     print(f"{PASS if passed else FAIL} {name}" + (f"  → {detail}" if detail else ""))
@@ -71,22 +80,22 @@ check("simple 模式无禁字段", not (data.get("mode") == "simple" and banned)
 # 3. 参数校验
 _, _, body, _ = call("POST", "/api/analyze", {"text": ""})
 r = json.loads(body)
-check("空文本被拦截", r.get("success") is False and r.get("error"), f"error={r.get('error')}")
+check("空文本被拦截", r.get("success") is False and error_text(r), f"error={r.get('error')}")
 
 _, _, body, _ = call("POST", "/api/analyze", {"text": "   \n "})
 r = json.loads(body)
-check("空白文本被拦截", r.get("success") is False and r.get("error"), f"error={r.get('error')}")
+check("空白文本被拦截", r.get("success") is False and error_text(r), f"error={r.get('error')}")
 
 _, _, body, _ = call("POST", "/api/analyze", raw="not-a-json")
 r = json.loads(body)
-check("非法请求体走统一契约", r.get("success") is False and r.get("error"), f"error={r.get('error')}")
+check("非法请求体走统一契约", r.get("success") is False and error_text(r), f"error={r.get('error')}")
 
 # 4. 超长与边界
 long_text = "关于校园活动的通知内容。" * 1500
 _, _, body, _ = call("POST", "/api/analyze", {"text": long_text})
 r = json.loads(body)
 check(f"超长文本（{len(long_text)} 字）被拦截",
-      r.get("success") is False and "通知过长" in (r.get("error") or ""), f"error={r.get('error')}")
+      r.get("success") is False and "通知过长" in (error_text(r) or ""), f"error={r.get('error')}")
 
 r = json.loads(call("POST", "/api/analyze", {"text": "a" * 3000})[2])
 check("3000 字边界正常返回", r.get("success") is True)
@@ -101,11 +110,15 @@ check("CORS 预检放行 localhost:5173", headers.get("access-control-allow-orig
       f"Allow-Origin={headers.get('access-control-allow-origin')}")
 
 # 6. Mock 响应时间
-t0 = time.perf_counter()
-for _ in range(20):
-    call("POST", "/api/analyze", {"text": "请于10月25日18:00前提交奖学金报名表。"})
-avg = (time.perf_counter() - t0) / 20 * 1000
-check("Mock 模式毫秒级响应", avg < 500, f"20 次平均 {avg:.1f} ms/次")
+mode = h.get("mode")
+if mode == "mock":
+    t0 = time.perf_counter()
+    for _ in range(20):
+        call("POST", "/api/analyze", {"text": "请于10月25日18:00前提交奖学金报名表。"})
+    avg = (time.perf_counter() - t0) / 20 * 1000
+    check("Mock 模式毫秒级响应", avg < 500, f"20 次平均 {avg:.1f} ms/次")
+else:
+    check("真实模式性能采样跳过", True, "避免在真实模式重复消耗模型额度")
 
 failed = [n for n, ok in results if not ok]
 print("-" * 60)

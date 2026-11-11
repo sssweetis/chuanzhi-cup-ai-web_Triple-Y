@@ -1,4 +1,4 @@
-﻿param(
+param(
   [Parameter(Mandatory = $true)][string]$BaseUrl,
   [string]$Output = ''
 )
@@ -13,6 +13,7 @@ if (-not $Output) {
 }
 
 $Tests = @(
+  'smoke_test_errors.py',
   'smoke_test.py',
   'smoke_test_check.py',
   'smoke_test_prepare.py',

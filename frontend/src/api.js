@@ -1,7 +1,14 @@
 // 后端联调：http://127.0.0.1:8000，CORS 已开，无需代理
 // 响应信封统一为 HTTP 200 + { success, data, error }，这里拆开返回 data / 抛 error
-const BASE_URL = 'https://41cd1cf5.r22.cpolar.top'
+const BASE_URL = ''
 const TIMEOUT = 90_000
+
+function errorText(payload, fallback = '请求失败') {
+  const err = payload && payload.error
+  if (typeof err === 'string') return err
+  if (err && typeof err === 'object') return err.message || fallback
+  return fallback
+}
 let SESSION_ID = localStorage.getItem('zhiban-session-id')
 if (!SESSION_ID) { SESSION_ID = 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); localStorage.setItem('zhiban-session-id', SESSION_ID) }
 
@@ -26,7 +33,7 @@ async function request(path, { method = 'POST', body } = {}) {
   let payload = {}
   try { payload = await res.json() } catch { /* 非 JSON */ }
   if (!payload.success) {
-    throw new Error(payload.error || `接口 ${path} 失败`)
+    throw new Error(errorText(payload, `接口 ${path} 失败`))
   }
   return payload.data
 }
@@ -66,7 +73,7 @@ export const savePrepareList = (payload) =>
 export async function loadPrepareList(matterId) {
   const res = await fetch(`${BASE_URL}/api/prepare-list/${encodeURIComponent(matterId)}`, { headers: { 'X-Session-Id': SESSION_ID } })
   const payload = await res.json()
-  if (!payload.success) throw new Error(payload.error || '加载准备清单失败')
+  if (!payload.success) throw new Error(errorText(payload, '加载准备清单失败'))
   return payload.data
 }
 
@@ -79,7 +86,7 @@ export async function analyzeImage(file) {
   try {
     const res = await fetch(BASE_URL + '/api/analyze-image', { method: 'POST', body: fd, headers: { 'X-Session-Id': SESSION_ID }, signal: ctrl.signal })
     const payload = await res.json()
-    if (!payload.success) throw new Error(payload.error || '图片解析失败')
+    if (!payload.success) throw new Error(errorText(payload, '图片解析失败'))
     return payload.data
   } finally { clearTimeout(timer) }
 }
@@ -93,7 +100,7 @@ export async function analyzePdf(file) {
   try {
     const res = await fetch(BASE_URL + '/api/analyze-pdf', { method: 'POST', body: fd, headers: { 'X-Session-Id': SESSION_ID }, signal: ctrl.signal })
     const payload = await res.json()
-    if (!payload.success) throw new Error(payload.error || 'PDF 解析失败')
+    if (!payload.success) throw new Error(errorText(payload, 'PDF 解析失败'))
     return payload.data
   } finally { clearTimeout(timer) }
 }
@@ -112,7 +119,7 @@ export async function uploadFile(file) {
   const fd = new FormData(); fd.append('file', file)
   const res = await fetch(BASE_URL + '/api/files', { method: 'POST', body: fd, headers: { 'X-Session-Id': SESSION_ID } })
   const p = await res.json()
-  if (!p.success) throw new Error(p.error || '上传失败')
+  if (!p.success) throw new Error(errorText(p, '上传失败'))
   return p.data
 }
 
@@ -139,7 +146,7 @@ export async function askQuestion(payload) {
     body: JSON.stringify(payload)
   })
   const p = await res.json()
-  if (!p.success) throw new Error(p.error || '提问失败')
+  if (!p.success) throw new Error(errorText(p, '提问失败'))
   return p.data
 }
 
@@ -150,7 +157,7 @@ export async function compareNotifications(payload) {
     body: JSON.stringify(payload)
   })
   const p = await res.json()
-  if (!p.success) throw new Error(p.error || '对比失败')
+  if (!p.success) throw new Error(errorText(p, '对比失败'))
   return p.data
 }
 
@@ -161,7 +168,7 @@ export async function checkDate(payload) {
     body: JSON.stringify(payload)
   })
   const p = await res.json()
-  if (!p.success) throw new Error(p.error || '日期核对失败')
+  if (!p.success) throw new Error(errorText(p, '日期核对失败'))
   return p.data
 }
 

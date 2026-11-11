@@ -148,8 +148,8 @@ def main():
     for name, expected, text in SAMPLES:
         resp, cost, status = call("/api/analyze", {"text": text})
         if not resp.get("success"):
-            rows.append((name, expected, "-", "-", "-", "%.0f" % cost, "%s %s" % (FAIL, resp.get("error"))))
-            all_issues.append("%s：分析失败 - %s" % (name, resp.get("error")))
+            rows.append((name, expected, "-", "-", "-", "%.0f" % cost, "%s %s" % (FAIL, error_text(resp))))
+            all_issues.append("%s：分析失败 - %s" % (name, error_text(resp)))
             continue
         data = resp.get("data") or {}
         matters[name] = data
@@ -166,7 +166,7 @@ def main():
         # 缺项核对
         chk, ccost, _ = call("/api/check", {"matter": data, "checked_material_ids": [], "profile": {"has_video": False}})
         if not chk.get("success"):
-            all_issues.append("%s：/api/check 失败 - %s" % (name, chk.get("error")))
+            all_issues.append("%s：/api/check 失败 - %s" % (name, error_text(chk)))
         else:
             cd = chk.get("data") or {}
             if not cd.get("summary"):

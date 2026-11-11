@@ -39,6 +39,15 @@ def upload(filename, content, ctype="text/plain"):
             return {"success": False, "error": "HTTP %s" % e.code}
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -85,10 +94,10 @@ def main():
           "answer=%s" % (a2d.get("answer") or "")[:40])
 
     bad = upload("tool.exe", b"MZ...", "application/octet-stream")
-    check("不支持的格式被拦截", bad.get("success") is False and "仅支持" in (bad.get("error") or ""), "error=%s" % bad.get("error"))
+    check("不支持的格式被拦截", bad.get("success") is False and "仅支持" in (error_text(bad) or ""), "error=%s" % error_text(bad))
 
     big = upload("big.txt", b"a" * (10 * 1024 * 1024 + 10))
-    check("超过 10MB 被拦截", big.get("success") is False and "10 MB" in (big.get("error") or ""), "error=%s" % big.get("error"))
+    check("超过 10MB 被拦截", big.get("success") is False and "10 MB" in (error_text(big) or ""), "error=%s" % error_text(big))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

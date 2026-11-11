@@ -72,6 +72,11 @@ from compare_store import (compare_matters, save_comparison, get_comparison,
 from date_tool import check_date, parse_date  # noqa: E402
 from export_tools import export_prepare_list_csv, export_prepare_list_markdown  # noqa: E402
 from rate_limit import limiter, is_rate_limit_enabled, limit_for_path  # noqa: E402
+from error_contract import (new_request_id, set_request_id, reset_request_id,
+                            current_request_id, error_object, infer_error_meta)  # noqa: E402
+from log_redaction import install as install_log_redaction  # noqa: E402
+
+install_log_redaction()
 
 # ==================== 配置 ====================
 
@@ -95,6 +100,16 @@ def _read_max_text_length() -> int:
 
 MAX_TEXT_LENGTH = _read_max_text_length()
 
+API_VERSION = "1.0.0"
+API_CONTRACT_VERSION = "v2"
+
+
+def _allowed_origins():
+    raw = (os.getenv("CORS_ALLOW_ORIGINS") or "*").strip()
+    if raw == "*":
+        return ["*"]
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
 API_KEY = (os.getenv("LLM_API_KEY") or "").strip()
 
 
@@ -117,20 +132,33 @@ else:
 app = FastAPI(
     title="通知抽取服务",
     description="校园通知原文 → 结构化 Matter JSON（截止时间 / 材料清单 / 步骤）",
-    version="1.0.0",
+    version=API_VERSION,
 )
 
 # CORS：允许所有来源，方便 B 在 http://localhost:5173 直接跨域调用。
 # 注意：allow_credentials 必须为 False，才能与 allow_origins=["*"] 同时生效。
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_private_network=True,
 )
 
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """为每个请求生成可在日志与错误信封中追踪的 request_id。"""
+    request_id = request.headers.get("x-request-id") or new_request_id()
+    token = set_request_id(request_id)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        reset_request_id(token)
 
 
 @app.middleware("http")
@@ -162,8 +190,9 @@ async def rate_limit_middleware(request: Request, call_next):
             if not allowed:
                 return JSONResponse(
                     status_code=200,
-                    content={"success": False, "data": None,
-                             "error": "请求过于频繁，请 %d 秒后再试" % retry_after},
+                    content=_fail("请求过于频繁，请 %d 秒后再试" % retry_after,
+                                  code="RATE_LIMITED", stage="rate_limit",
+                                  retryable=True, retry_after=retry_after),
                     headers={"Retry-After": str(retry_after), "X-RateLimit-Limit": str(limit),
                              "X-RateLimit-Remaining": "0"},
                 )
@@ -183,12 +212,18 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     success: bool
     data: Optional[dict] = None
-    error: Optional[str] = None
+    error: Optional[dict] = None
 
 
-def _fail(error: str) -> dict:
-    """统一失败响应。"""
-    return {"success": False, "data": None, "error": error}
+def _fail(message, code=None, stage=None, retryable=False, retry_after=None) -> dict:
+    """统一错误信封 v2；保留调用方传入的人类可读提示。"""
+    code, stage, retryable = infer_error_meta(message, code, stage, retryable)
+    return {
+        "success": False,
+        "data": None,
+        "error": error_object(message, code=code, stage=stage,
+                              retryable=retryable, retry_after=retry_after),
+    }
 
 
 # ==================== 无 Key 时的演示兜底 ====================
@@ -206,6 +241,28 @@ def _mock_matter(notification_text: str) -> Optional[dict]:
         return None
 
 
+def _ensure_sources(data):
+    """补齐 simple Matter 的聚合 sources；不改变 A 的 mode/material/step 字段。"""
+    if not isinstance(data, dict):
+        return data
+    if data.get("sources"):
+        return data
+    quotes = []
+    deadline = data.get("deadline") or {}
+    if isinstance(deadline, dict):
+        quote = (deadline.get("source_ref") or {}).get("quote")
+        if quote:
+            quotes.append(quote)
+    for item in (data.get("materials") or []) + (data.get("step_list") or []):
+        if isinstance(item, dict):
+            quote = (item.get("source_ref") or {}).get("quote")
+            if quote and quote not in quotes:
+                quotes.append(quote)
+    if quotes:
+        data["sources"] = [{"quote": q, "page": None} for q in quotes]
+    return data
+
+
 def _analyze_with_fallback(text: str) -> dict:
     """先走 A 的真实抽取；无 Key 且 LLM_ENABLE_MOCK=1 时直接返回示例 Matter。
 
@@ -217,15 +274,17 @@ def _analyze_with_fallback(text: str) -> dict:
         mock = _mock_matter(text)
         if mock:
             logger.info("LLM_API_KEY 未配置，按 Mock 模式返回示例 Matter（内容虚构，结构真实）")
-            return {"success": True, "data": mock, "error": None}
+            return {"success": True, "data": _ensure_sources(mock), "error": None}
 
     result = analyze_notification(text)
+    if result.get("success"):
+        result["data"] = _ensure_sources(result.get("data"))
     if (not result.get("success") and LLM_ENABLE_MOCK
             and "LLM_API_KEY" in str(result.get("error") or "")):
         mock = _mock_matter(text)
         if mock:
             logger.warning("未配置 LLM_API_KEY，返回示例 Matter 兜底（仅供前端联调）")
-            return {"success": True, "data": mock, "error": None}
+            return {"success": True, "data": _ensure_sources(mock), "error": None}
     return result
 
 
@@ -244,7 +303,8 @@ def index():
 @app.get("/health")
 def health():
     """服务自检：status 固定 ok，mode 表示当前走 mock 还是真实大模型。"""
-    return {"status": "ok", "mode": runtime_mode()}
+    return {"status": "ok", "mode": runtime_mode(),
+            "version": API_VERSION, "api_contract": API_CONTRACT_VERSION}
 
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
@@ -317,8 +377,8 @@ def check(req: CheckRequest):
             notice_text=notice_text,
         )
     except Exception as e:  # 兜底：核对出错也不影响前端拿到原始 matter
-        logger.exception("核对异常：%s", e)
-        return _fail(f"核对异常：{e}")
+        logger.exception("request_id=%s 核对异常：%s", current_request_id(), e)
+        return _fail("核对失败，请重试", code="CHECK_FAILED", stage="check", retryable=True)
 
     return {"success": True, "data": {"matter": matter, **detail}, "error": None}
 
@@ -365,8 +425,8 @@ def prepare_list(req: PrepareListRequest):
     try:
         data = build_prepare_list(matter, req.checked_material_ids, req.profile)
     except Exception as e:
-        logger.exception("生成准备清单失败：%s", e)
-        return _fail(f"生成准备清单失败：{e}")
+        logger.exception("request_id=%s 生成准备清单失败：%s", current_request_id(), e)
+        return _fail("生成准备清单失败，请重试", code="PREPARE_FAILED", stage="prepare", retryable=True)
     return {"success": True, "data": data, "error": None}
 
 
@@ -379,8 +439,8 @@ def save_prepare_list_endpoint(req: SavePrepareListRequest, request: Request):
     except ValueError as e:
         return _fail(str(e))
     except Exception as e:
-        logger.exception("保存准备清单失败：%s", e)
-        return _fail(f"保存准备清单失败：{e}")
+        logger.exception("request_id=%s 保存准备清单失败：%s", current_request_id(), e)
+        return _fail("保存准备清单失败，请重试", code="PREPARE_SAVE_FAILED", stage="prepare", retryable=True)
     return {"success": True, "data": record, "error": None}
 
 
@@ -658,14 +718,14 @@ async def analyze_image(image: UploadFile = File(...)):
     try:
         matter, err = analyze_image_bytes(raw, image.filename or "image", ctype)
     except Exception as e:
-        logger.exception("图片解析异常：%s", e)
-        return _fail(f"图片解析异常：{e}")
+        logger.exception("request_id=%s 图片解析异常：%s", current_request_id(), e)
+        return _fail("图片解析失败，请重试", code="IMAGE_PARSE_FAILED", stage="image", retryable=True)
 
     if err:
         return _fail(err)
     if not isinstance(matter, dict) or not matter:
         return _fail("图片解析失败：结果为空")
-    return {"success": True, "data": matter, "error": None}
+    return {"success": True, "data": _ensure_sources(matter), "error": None}
 
 
 # ==================== 10/22：查看依据（要求 → 原文）====================
@@ -745,7 +805,7 @@ async def analyze_pdf(file: UploadFile = File(...)):
         try:
             a_result = analyze_notification_from_pdf(raw)
             if isinstance(a_result, dict) and a_result.get("success") and a_result.get("data"):
-                return {"success": True, "data": a_result.get("data"), "error": None}
+                return {"success": True, "data": _ensure_sources(a_result.get("data")), "error": None}
             logger.warning("A 的 PDF 解析失败（%s），改用本地提取", (a_result or {}).get("error"))
         except Exception as e:
             logger.warning("A 的 PDF 解析异常（%s），改用本地提取", e)
@@ -753,8 +813,8 @@ async def analyze_pdf(file: UploadFile = File(...)):
     try:
         text, meta, err = extract_pdf_text(raw)
     except Exception as e:
-        logger.exception("PDF 提取异常：%s", e)
-        return _fail(f"PDF 提取异常：{e}")
+        logger.exception("request_id=%s PDF 提取异常：%s", current_request_id(), e)
+        return _fail("PDF 解析失败，请重试", code="PDF_PARSE_FAILED", stage="pdf", retryable=True)
     if err:
         return _fail(err)
 
@@ -762,7 +822,7 @@ async def analyze_pdf(file: UploadFile = File(...)):
     result = _analyze_with_fallback(text)
     if not result.get("success"):
         return result
-    return {"success": True, "data": result.get("data"), "error": None}
+    return {"success": True, "data": _ensure_sources(result.get("data")), "error": None}
 
 
 # ==================== 10/26–10/27：文件片段索引 / 检索 / 追问 ====================
@@ -817,8 +877,8 @@ async def files_upload(request: Request, file: UploadFile = File(...)):
     except ValueError as e:
         return _fail(str(e))
     except Exception as e:
-        logger.exception("文件保存失败：%s", e)
-        return _fail(f"文件保存失败：{e}")
+        logger.exception("request_id=%s 文件保存失败：%s", current_request_id(), e)
+        return _fail("文件保存失败，请重试", code="FILE_SAVE_FAILED", stage="files", retryable=True)
     return {"success": True, "data": record, "error": None}
 
 
@@ -892,16 +952,18 @@ def ask(req: AskRequest, request: Request):
 @app.exception_handler(RequestValidationError)
 async def on_validation_error(request: Request, exc: RequestValidationError):
     """请求体不是合法 JSON / 字段类型不对时，也返回统一契约，而不是 FastAPI 默认的 422。"""
-    logger.warning("请求体校验失败：%s", exc.errors())
+    logger.warning("request_id=%s 请求体校验失败：%s", current_request_id(), exc.errors())
     return JSONResponse(status_code=200, content=_fail(
-        '请求体格式错误：请检查字段与类型（JSON: text / matter；multipart: image / file）'))
+        '请求体格式错误：请检查字段与类型（JSON: text / matter；multipart: image / file）',
+        code="REQUEST_INVALID", stage="validation", retryable=False))
 
 
 @app.exception_handler(Exception)
 async def on_unhandled_error(request: Request, exc: Exception):
     """兜底：任何未捕获异常都转成统一契约，避免前端拿到 500 堆栈。"""
-    logger.exception("服务内部异常：%s", exc)
-    return JSONResponse(status_code=200, content=_fail(f"服务内部异常：{exc}"))
+    logger.exception("request_id=%s 服务内部异常：%s", current_request_id(), exc)
+    return JSONResponse(status_code=200, content=_fail(
+        "服务暂时不可用，请稍后重试", code="INTERNAL_ERROR", stage="internal", retryable=True))
 
 
 # ==================== 本地直接运行 ====================

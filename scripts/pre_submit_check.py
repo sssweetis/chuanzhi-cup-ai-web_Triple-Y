@@ -16,14 +16,15 @@ SECRET_PATTERNS = [
     (re.compile(r"3547251833@qq\.com"), "个人邮箱"),
 ]
 REQUIRED = [
-    "README.md", "LICENSE", "backend/main.py", "backend/requirements.txt",
+    "README.md", "LICENSE", "backend/main.py", "backend/requirements.txt", "backend/error_contract.py", "backend/smoke_test_errors.py",
     "backend/.env.example", "backend/smoke_test_hardening.py", "frontend/package.json",
     "scripts/build_tech_pdf.ps1",
     "docs/技术文档.md", "docs/技术文档.html", "docs/技术文档.pdf", "docs/演示视频脚本.md",
     "docs/作品介绍文档.md", "docs/作品介绍文档.pdf", "docs/预提交材料说明.md",
     "docs/部署说明.md", "docs/第三阶段测试用例.md", "docs/真实模型验收记录.md",
-    "scripts/online_acceptance.ps1", "scripts/deploy-vps.sh",
+    "scripts/online_acceptance.ps1", "scripts/deploy-vps.sh", "scripts/final_package.py",
     "docker-compose.prod.yml", "frontend/Dockerfile", "frontend/nginx.conf",
+    ".github/workflows/ci.yml",
 ]
 LARGE_MB = 5
 

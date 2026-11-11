@@ -24,6 +24,15 @@ def call(method, path, payload=None):
             return {"success": False, "error": "HTTP %s" % e.code}
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -61,11 +70,11 @@ def main():
     check("只传 text 也能生成", p3.get("success") is True and bool((p3.get("data") or {}).get("todo_list")))
 
     p4 = call("POST", "/api/prepare-list", {})
-    check("都不传 → 明确报错", p4.get("success") is False and bool(p4.get("error")), "error=%s" % p4.get("error"))
+    check("都不传 → 明确报错", p4.get("success") is False and bool(error_text(p4)), "error=%s" % error_text(p4))
     s2 = call("POST", "/api/prepare-list/save", {"matter_id": "", "todo_list": []})
-    check("保存缺 matter_id → 报错", s2.get("success") is False and bool(s2.get("error")), "error=%s" % s2.get("error"))
+    check("保存缺 matter_id → 报错", s2.get("success") is False and bool(error_text(s2)), "error=%s" % error_text(s2))
     g2 = call("GET", "/api/prepare-list/not-exist-id")
-    check("读取不存在 → 报错", g2.get("success") is False and bool(g2.get("error")), "error=%s" % g2.get("error"))
+    check("读取不存在 → 报错", g2.get("success") is False and bool(error_text(g2)), "error=%s" % error_text(g2))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

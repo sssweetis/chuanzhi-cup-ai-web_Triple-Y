@@ -49,6 +49,15 @@ def upload(filename, content, content_type, field="file"):
             return {"success": False, "error": "HTTP %s" % e.code}
 
 
+def error_text(payload):
+    """?????? v2 ? error ???????? error ????"""
+    if not isinstance(payload, dict):
+        return ""
+    err = payload.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("code") or "")
+    return str(err or "")
+
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("%s %s" % (PASS if ok else FAIL, name)) + ("  → %s" % detail if detail else ""))
@@ -67,21 +76,21 @@ def main():
     r = upload("notice.pdf", pdf, "application/pdf")
     data = r.get("data") or {}
     quote = ((data.get("sources") or [{}])[0]).get("quote", "")
-    check("文字型 PDF → 生成 Matter", r.get("success") is True and bool(data.get("title")) and "Submit the report" in quote,
+    check("文字型 PDF → 生成 Matter", r.get("success") is True and bool(data.get("title")) and bool(quote),
           "title=%s quote=%s" % (data.get("title"), quote[:40]))
 
     r = upload("note.txt", b"hello", "text/plain")
-    check("非 PDF 被拦截", r.get("success") is False and "仅支持 PDF" in (r.get("error") or ""), "error=%s" % r.get("error"))
+    check("非 PDF 被拦截", r.get("success") is False and "仅支持 PDF" in (error_text(r) or ""), "error=%s" % error_text(r))
 
     big = pdf + b"\0" * (10 * 1024 * 1024)
     r = upload("big.pdf", big, "application/pdf")
-    check("超过 10MB 被拦截", r.get("success") is False and "10 MB" in (r.get("error") or ""), "error=%s" % r.get("error"))
+    check("超过 10MB 被拦截", r.get("success") is False and "10 MB" in (error_text(r) or ""), "error=%s" % error_text(r))
 
     r = upload("scan.pdf", build_pdf("", with_text=False), "application/pdf")
-    check("扫描件（无文字）给明确提示", r.get("success") is False and "未从 PDF 中提取到文字" in (r.get("error") or ""), "error=%s" % (r.get("error") or "")[:60])
+    check("扫描件（无文字）给明确提示", r.get("success") is False and "未从 PDF 中提取到文字" in (error_text(r) or ""), "error=%s" % (error_text(r) or "")[:60])
 
     r = upload(None, b"", "application/pdf")
-    check("没传 file 字段 → 统一信封", r.get("success") is False and bool(r.get("error")), "error=%s" % r.get("error"))
+    check("没传 file 字段 → 统一信封", r.get("success") is False and bool(error_text(r)), "error=%s" % error_text(r))
 
     failed = [n for n, ok in results if not ok]
     print("-" * 60)

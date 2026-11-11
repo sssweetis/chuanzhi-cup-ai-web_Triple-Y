@@ -189,15 +189,17 @@ powershell -ExecutionPolicy Bypass -File .\configure_env.ps1 -ApiKey "<你的API
 ```env
 LLM_ENABLE_MOCK=0
 LLM_API_KEY=<在此填入你的APIKey>
-LLM_BASE_URL=https://api.openai.com/v1   # 用国内平台就换成对应地址
-LLM_MODEL=gpt-4o                         # 与平台匹配的模型名
+LLM_BASE_URL=https://api.deepseek.com   # 团队正式使用 DeepSeek
+LLM_MODEL=deepseek-flash                # API model ID，不是平台展示名
 PORT=8000
 ```
+
+> `deepseek-chat` 只是兼容别名，团队统一配置 `deepseek-flash`。
 
 ### 方式三：系统环境变量（比赛演示机器不想留 .env 文件时）
 
 ```powershell
-$env:LLM_API_KEY="<在此填入你的APIKey>"; $env:LLM_MODEL="gpt-4o"; python -m uvicorn main:app --port 8000
+$env:LLM_API_KEY="<在此填入你的APIKey>"; $env:LLM_MODEL="deepseek-flash"; python -m uvicorn main:app --port 8000
 ```
 
 ### 验证密钥是否真的能用

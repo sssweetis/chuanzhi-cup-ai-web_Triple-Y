@@ -29,7 +29,7 @@
 <h1>通知抽取助手 · 技术文档</h1>
 <blockquote>
 <p>队伍：Triple Y ｜ 比赛：传智杯 AI WEB 网页开发挑战赛
-版本：v1.3 ｜ 日期：2026-10-29</p>
+版本：v1.4 ｜ 日期：2026-11-11（模型 ID 复核）</p>
 <p>说明：本文由 A（李丹阳）与 C（方可圆）共同汇总。当前为省赛提交版；团队正式 Key 已配置，文本与视觉使用 DeepSeek Flash，首轮真实验收完成，DeepSeek 控制台累计 70 次请求 / 214,613 tokens / ¥0.61（2026-10-29）。</p>
 </blockquote>
 <h2>目录</h2>
@@ -438,6 +438,9 @@ LLM_API_KEY=&lt;your-deepseek-key&gt;
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-flash
 </code></pre>
+<blockquote>
+<p>模型 ID 以 API <code>/models</code> 返回为准：团队 Key 返回 <code>deepseek-flash</code>、<code>deepseek-v4-pro</code>；实际调用 <code>deepseek-flash</code> 返回 <code>model=deepseek-flash</code>，<code>deepseek-chat</code> 只是兼容别名，不作为团队配置，也不把平台展示名称当作 API model ID。</p>
+</blockquote>
 <p>选择 DeepSeek 的理由：</p>
 <ol>
 <li><strong>团队账号统一</strong>：一个团队 Key、一个文本模型，额度、账单和调用记录集中管理，避免多人用不同供应商/不同 Key 导致结果不可复现。</li>
@@ -1476,7 +1479,7 @@ score &gt; 0.6 → complex
 <li><strong>通知变化</strong>：已支持增量合并、受影响待办、用户确认和版本留档；连续多份补充通知、跨段落语义改期需要更多真实样例验证。</li>
 <li><strong>日期与校历</strong>：覆盖周末和常见固定节假日；农历节日、地方假期、调休以学校/单位通知为准，后续接可配置校历。</li>
 <li><strong>会话与权限</strong>：<code>X-Session-Id</code> 只做浏览器会话隔离，不是登录鉴权；账号体系、权限管理、多人协作属于后续规划。</li>
-<li><strong>提醒与部署</strong>：已生成 DDL 提醒任务，系统推送未接入；Docker / Render / VPS 配置已准备，公网地址和演示视频在提交前补齐。</li>
+<li><strong>提醒与部署</strong>：已生成 DDL 提醒任务，系统推送未接入；Docker / Render / VPS 配置已准备。在线演示为可选加分项，若服务器资源落实则补充公网地址，否则以本地演示和视频为准；演示视频按 5–8 分钟要求录制。</li>
 </ul>
 <p>后续方向：向量检索与重排、复杂条件分支、多文件合并、日历/飞书/系统通知、多人协作、移动端体验与更完整的真实样本评测。</p>
 <h3>8.3 社会价值与商业潜力</h3>

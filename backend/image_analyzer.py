@@ -125,5 +125,8 @@ def analyze_image_bytes(raw: bytes, filename: str, content_type: str) -> Tuple[O
 
     result = analyze_with_fallback(extracted_text)
     if not result.get("success"):
-        return None, result.get("error") or "图片内容解析失败"
+        err = result.get("error") or "图片内容解析失败"
+        if isinstance(err, dict):
+            err = err.get("message") or "图片内容解析失败"
+        return None, err
     return result.get("data"), None

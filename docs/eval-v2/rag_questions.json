@@ -1,0 +1,112 @@
+{
+  "docs": [
+    {
+      "doc_name": "奖学金通知",
+      "text": "请于2026年11月20日18:00前提交报名表、成绩单和身份证复印件。推荐信为选填材料。材料交至学院办公室A203。"
+    },
+    {
+      "doc_name": "视频要求",
+      "text": "申请者还需提交一段不超过3分钟的介绍视频，格式为MP4，画面清晰，文件大小不超过100MB。"
+    },
+    {
+      "doc_name": "缴费与审核",
+      "text": "学院初审通过后缴纳报名费100元；缴费成功后打印准考证。审核未通过者无需缴费。"
+    },
+    {
+      "doc_name": "安全承诺",
+      "text": "社会实践团队须提交安全承诺书，并由指导老师签字；活动期间每日报备安全情况。"
+    }
+  ],
+  "questions": [
+    {
+      "id": "R01",
+      "query": "视频有什么要求",
+      "expect": "视频",
+      "out_of_scope": false
+    },
+    {
+      "id": "R02",
+      "query": "材料交到哪里",
+      "expect": "A203",
+      "out_of_scope": false
+    },
+    {
+      "id": "R03",
+      "query": "报名费多少钱",
+      "expect": "100",
+      "out_of_scope": false
+    },
+    {
+      "id": "R04",
+      "query": "推荐信是必交吗",
+      "expect": "选填",
+      "out_of_scope": false
+    },
+    {
+      "id": "R05",
+      "query": "成绩单需要吗",
+      "expect": "成绩单",
+      "out_of_scope": false
+    },
+    {
+      "id": "R06",
+      "query": "审核通过后做什么",
+      "expect": "缴费",
+      "out_of_scope": false
+    },
+    {
+      "id": "R07",
+      "query": "安全承诺书谁签字",
+      "expect": "指导老师",
+      "out_of_scope": false
+    },
+    {
+      "id": "R08",
+      "query": "视频格式是什么",
+      "expect": "MP4",
+      "out_of_scope": false
+    },
+    {
+      "id": "R09",
+      "query": "活动期间要报备吗",
+      "expect": "报备",
+      "out_of_scope": false
+    },
+    {
+      "id": "R10",
+      "query": "准考证什么时候打印",
+      "expect": "缴费",
+      "out_of_scope": false
+    },
+    {
+      "id": "R11",
+      "query": "食堂几点开门",
+      "expect": null,
+      "out_of_scope": true
+    },
+    {
+      "id": "R12",
+      "query": "宿舍怎么申请",
+      "expect": null,
+      "out_of_scope": true
+    },
+    {
+      "id": "R13",
+      "query": "图书馆开放时间",
+      "expect": null,
+      "out_of_scope": true
+    },
+    {
+      "id": "R14",
+      "query": "校车路线",
+      "expect": null,
+      "out_of_scope": true
+    },
+    {
+      "id": "R15",
+      "query": "网络密码是多少",
+      "expect": null,
+      "out_of_scope": true
+    }
+  ]
+}

@@ -6,8 +6,10 @@ import math
 import uuid
 import os
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Set, Optional, Union
+from ai_error import ai_error, classify_exception, failure_payload, message_of
 from notification_extractor import (
     LLMClient,
     MatterExtractor,
@@ -62,6 +64,21 @@ def _apply_mode_guards(data: dict) -> dict:
     data = normalize_todo_order(data)
     data = normalize_step_orders(data)
     return data
+
+
+def _workflow_step(trace: List[Dict[str, Any]], name: str, status: str = "ok",
+                   detail: str = "", started: Optional[float] = None) -> None:
+    """记录一个可展示、可断言的工作流阶段，不包含 Key/原文。"""
+    item: Dict[str, Any] = {
+        "step": len(trace) + 1,
+        "name": name,
+        "status": status,
+    }
+    if detail:
+        item["detail"] = detail
+    if started is not None:
+        item["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
+    trace.append(item)
 
 
 def _fix_todo_actions(data: dict):
@@ -274,17 +291,46 @@ def _rebuild_missing_items(data: dict):
 
 
 def analyze_notification(notification_text: str) -> Dict[str, Any]:
+    """文本通知 → Matter。
+
+    A1：所有 AI 失败都返回结构化 error（code/message/stage/retryable），
+    原始异常只写日志；A5：成功时附带 workflow_trace，供前端/答辩展示
+    “校验 → 抽取 → Schema → 归一化 → 完成”的真实阶段。
+    """
+    trace: List[Dict[str, Any]] = []
+
     if not notification_text or not notification_text.strip():
-        return {"success": False, "data": None, "error": "通知内容不能为空"}
+        return {"success": False, "data": None,
+                "error": ai_error("AI_EMPTY", "通知内容不能为空", stage="validate_input", retryable=False)}
 
     try:
+        t0 = time.perf_counter()
+        _workflow_step(trace, "validate_input", detail="文本非空，长度=%d" % len(notification_text), started=t0)
+
+        t0 = time.perf_counter()
         extractor = _get_extractor()
         matter, err = extractor.process(notification_text)
         if err:
-            return {"success": False, "data": None, "error": err}
+            detail = str(err)
+            code = "AI_SCHEMA" if ("Schema" in detail or "JSON" in detail) else "AI_PARSE_FAILED"
+            return {
+                "success": False,
+                "data": None,
+                "error": ai_error(
+                    code,
+                    "AI 返回格式不稳定，请重试一次" if code == "AI_SCHEMA" else "没有解析出可用的通知内容，请换一段更完整的文本",
+                    stage="ai_extract",
+                    retryable=True,
+                    detail=detail,
+                ),
+            }
+        _workflow_step(trace, "ai_extract", detail="model=%s" % getattr(extractor.llm, "model", ""), started=t0)
 
+        t0 = time.perf_counter()
         data = matter.to_dict()
+        _workflow_step(trace, "schema_validate", detail="Matter 结构校验通过", started=t0)
 
+        t0 = time.perf_counter()
         if not data.get("warning_list"):
             data["warning_list"] = []
         if not data.get("deadline") or not data["deadline"].get("due_at"):
@@ -299,11 +345,20 @@ def analyze_notification(notification_text: str) -> Dict[str, Any]:
         _fix_step_titles(data)
         _rebuild_missing_items(data)
         data = _apply_mode_guards(data)
+        _workflow_step(trace, "normalize", detail="补齐待办/步骤/缺项并按 mode 裁剪", started=t0)
 
+        t0 = time.perf_counter()
+        data["workflow_trace"] = trace + [{
+            "step": len(trace) + 1,
+            "name": "finalize",
+            "status": "ok",
+            "detail": "输出 Matter，mode=%s" % data.get("mode", "simple"),
+            "elapsed_ms": round((time.perf_counter() - t0) * 1000),
+        }]
         return {"success": True, "data": data, "error": None}
     except Exception as e:
         logger.exception("AI 解析异常")
-        return {"success": False, "data": None, "error": f"解析异常: {str(e)}"}
+        return failure_payload(e, stage="ai_extract")
 
 def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
     """新增：截图分析入口（多模态）。返回结构与 analyze_notification 一致，附 confirmation_needed。
@@ -311,10 +366,14 @@ def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
     """
 
     if not image_data_uri or not image_data_uri.strip():
-        return {"success": False, "data": None, "error": "图片不能为空"}
+        return {"success": False, "data": None,
+                "error": ai_error("IMAGE_EMPTY", "图片内容为空，请重新选择", stage="upload", retryable=False)}
 
+    trace: List[Dict[str, Any]] = []
     try:
+        t0 = time.perf_counter()
         extractor = _get_extractor()
+        _workflow_step(trace, "image_input", detail="收到截图数据", started=t0)
         llm = extractor.llm
         sys_raw = SYSTEM_PROMPT  # 复用你的系统提示词
         sys_total = sys_raw + IMAGE_CHECK_RULES  # 只新增，不改原有
@@ -363,11 +422,18 @@ def analyze_notification_from_image(image_data_uri: str) -> Dict[str, Any]:
         data = _apply_mode_guards(data)
 
         data["confirmation_needed"] = confirmations
+        _workflow_step(trace, "vision_extract", detail="截图 → Matter", started=t0)
+        data["workflow_trace"] = trace + [{
+            "step": len(trace) + 1,
+            "name": "finalize",
+            "status": "ok",
+            "detail": "输出 Matter，mode=%s" % data.get("mode", "simple"),
+        }]
         return {"success": True, "data": data, "error": None, "source": "image"}
 
     except Exception as e:
         logger.exception("图片分析异常")
-        return {"success": False, "data": None, "error": f"图片解析失败: {str(e)}"}
+        return failure_payload(e, stage="image")
 
 
 # ==================== 10.25：文字型 PDF 解析入口 ====================
@@ -540,7 +606,7 @@ def update_matter_status_with_ai(matter_data: dict, raw_text: str, user_action: 
 
     except Exception as e:
         logger.exception("状态更新异常")
-        return {"success": False, "data": matter_data, "error": f"状态更新失败: {str(e)}"}
+        return {"success": False, "data": matter_data, "error": classify_exception(e, stage="status_update")}
 
 
 # ==================== 10.26：片段划分与多材料检索功能 ====================
@@ -624,6 +690,28 @@ class NotificationRetriever:
                 elif d.get("text"):
                     self.add_document(d["text"], doc_name=d_name, doc_id=d_id)
 
+    # 业务同义词：通知里“截止/期限/提交时间”经常混用，纯字符匹配会漏召回。
+    # 只扩展检索词，不改变原文，也不把扩展词写进引用。
+    # 这些词在材料外问题里也经常出现；不能只凭它们就判定“命中材料”。
+    _GENERIC_QUERY_TERMS = {
+        "时间", "什么时候", "怎么", "怎样", "什么", "如何", "哪里", "多少",
+        "需要", "可以", "是否", "申请", "开放", "打印", "要求", "情况",
+        "请问", "一下", "这个", "那个", "几点", "开门", "密码",
+    }
+
+    _SYNONYM_GROUPS = (
+        ("截止", "期限", "提交时间", "截止时间", "d dl", "deadline", "时间节点"),
+        ("材料", "资料", "文件", "附件", "证明"),
+        ("视频", "录像", "短片", "影像"),
+        ("成绩单", "成绩证明", "成绩"),
+        ("报名表", "申请表", "申报表"),
+        ("缴费", "费用", "报名费", "交费", "付款"),
+        ("审核", "审批", "盖章", "签字"),
+        ("提交", "上交", "递交", "上传", "发送"),
+        ("报名", "申报", "申请"),
+        ("地点", "地址", "交到", "提交到"),
+    )
+
     @staticmethod
     def _tokenize(text: str) -> List[str]:
         """中英混合分词（词组、中文字符与 2-gram）"""
@@ -637,55 +725,178 @@ class NotificationRetriever:
         bigrams = [filtered_chars[i] + filtered_chars[i+1] for i in range(len(filtered_chars) - 1)]
         return words + filtered_chars + bigrams
 
+    def _expand_query(self, query: str) -> List[str]:
+        """在原有 token 上补业务同义词，提升“同义改写”的召回。"""
+        terms = list(dict.fromkeys(self._tokenize(query)))
+        q_lower = (query or "").lower()
+        for group in self._SYNONYM_GROUPS:
+            if any(word.lower() in q_lower for word in group):
+                for word in group:
+                    if word not in terms:
+                        terms.append(word.lower())
+        return terms
+
+    def _idf(self, terms: List[str]) -> Dict[str, float]:
+        """轻量 IDF：越少片段出现的词，区分度越高。"""
+        if not self.chunks:
+            return {}
+        df: Dict[str, int] = {}
+        for chunk in self.chunks:
+            content = chunk.content.lower()
+            for term in set(terms):
+                if term and term in content:
+                    df[term] = df.get(term, 0) + 1
+        n = len(self.chunks)
+        return {term: math.log(1.0 + (n - count + 0.5) / (count + 0.5))
+                for term, count in df.items()}
+
+    @staticmethod
+    def _phrase_bonus(clean_q: str, clean_c: str) -> float:
+        if not clean_q or not clean_c:
+            return 0.0
+        if clean_q in clean_c:
+            return 1.0
+        for span_len in (8, 6, 5, 4, 3, 2):
+            for start in range(max(0, len(clean_q) - span_len + 1)):
+                if clean_q[start:start + span_len] in clean_c:
+                    return min(1.0, 0.35 * (span_len / 2.0))
+        return 0.0
+
+    @staticmethod
+    def _dedupe(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """同一段文字被切成重叠片段时只保留得分最高的一条。"""
+        kept: List[Dict[str, Any]] = []
+        for item in results:
+            content = re.sub(r"\s+", "", item.get("content", ""))
+            duplicate = False
+            for prev in kept:
+                prev_content = re.sub(r"\s+", "", prev.get("content", ""))
+                if not content or not prev_content:
+                    continue
+                if content == prev_content:
+                    duplicate = True
+                    break
+                shorter, longer = sorted((content, prev_content), key=len)
+                if len(shorter) >= 40 and shorter in longer and len(shorter) / max(1, len(longer)) > 0.85:
+                    duplicate = True
+                    break
+            if not duplicate:
+                kept.append(item)
+        return kept
+
     def search(
         self,
         query: str,
         top_k: int = 3,
         score_threshold: float = 0.10,
     ) -> List[Dict[str, Any]]:
+        """混合检索：词项覆盖 + IDF/BM25 近似 + 连续短语 + 标题加权 + 去重。
+
+        保持纯本地、可解释、零额外服务；比旧版增加同义扩展和区分度加权。
+        旧算法保留为 `search_baseline`，用于评测前后对比。
         """
-        从所有切分片段中检索与 query 最相关的 Top K 个片段
-        """
-        query_terms = self._tokenize(query)
+        query_terms = self._expand_query(query)
         if not query_terms or not self.chunks:
             return []
 
         clean_q = re.sub(r"[^\w\u4e00-\u9fa5]", "", query.lower())
+        idf = self._idf(query_terms)
+        total_idf = sum(idf.values()) or 1.0
         scored_results = []
 
+        # 锚点只来自用户原词，不来自同义扩展；否则“申请”扩展出的“报名”
+        # 会让“宿舍怎么申请”误命中奖学金通知。
+        anchor_terms = {t for t in self._tokenize(query)
+                        if len(t) >= 2 and t not in self._GENERIC_QUERY_TERMS}
+        deadline_query = any(k in query for k in ("截止", "ddl", "提交时间", "什么时候提交"))
+        for chunk in self.chunks:
+            content = chunk.content
+            c_lower = content.lower()
+            matched_terms = [t for t in set(query_terms) if t and t in c_lower]
+            if not matched_terms:
+                continue
+
+            clean_c = re.sub(r"[^\w\u4e00-\u9fa5]", "", c_lower)
+            phrase = self._phrase_bonus(clean_q, clean_c)
+            # 材料外问题（如“宿舍怎么申请”）经常只命中“申请/时间”等通用词；
+            # 必须命中至少一个领域锚点，或出现足够长的连续短语，才保留结果。
+            # “截止时间是什么时候”可能原文只写“11月20日前”，用日期模式补一个锚点。
+            has_date = bool(re.search(r"\d{1,2}\s*月\s*\d{1,2}\s*日|\d{4}[-/]\d{1,2}[-/]\d{1,2}", content))
+            anchor_hit = any(t in c_lower for t in anchor_terms) if anchor_terms else False
+            if not anchor_hit and phrase < 0.5 and not (deadline_query and has_date):
+                continue
+
+            coverage = len(matched_terms) / max(1, len(set(query_terms)))
+            matched_idf = sum(idf.get(t, 0.0) for t in matched_terms)
+            idf_score = min(1.0, matched_idf / total_idf)
+
+            # BM25 近似：词频做饱和，长片段做长度惩罚。
+            avg_len = max(1.0, sum(len(c.content) for c in self.chunks) / len(self.chunks))
+            bm25 = 0.0
+            for term in matched_terms:
+                tf = c_lower.count(term)
+                if tf:
+                    bm25 += (idf.get(term, 0.0) * tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * len(content) / avg_len))
+            bm25_score = min(1.0, bm25 / max(1.0, total_idf * 1.2))
+
+            title_bonus = 0.08 if any(t in chunk.doc_name.lower() for t in matched_terms) else 0.0
+            material_bonus = 0.05 if (
+                any(k in query for k in ("材料", "视频", "成绩单", "报名表", "缴费"))
+                and any(k in content for k in ("材料", "视频", "成绩单", "报名表", "缴费"))
+            ) else 0.0
+
+            final_score = round(min(1.0, 0.30 * coverage + 0.30 * idf_score +
+                                     0.22 * bm25_score + 0.18 * phrase +
+                                     title_bonus + material_bonus), 4)
+
+            if final_score >= score_threshold:
+                c_dict = chunk.to_dict()
+                c_dict["score"] = final_score
+                c_dict["matched_terms"] = matched_terms[:8]
+                c_dict["retrieval"] = "hybrid"
+                scored_results.append(c_dict)
+
+        scored_results.sort(key=lambda x: (x["score"], x.get("chunk_id", "")), reverse=True)
+        return self._dedupe(scored_results)[:top_k]
+
+    def search_baseline(
+        self,
+        query: str,
+        top_k: int = 3,
+        score_threshold: float = 0.10,
+    ) -> List[Dict[str, Any]]:
+        """旧版词法检索，只用于评测对照，不作为默认路径。"""
+        query_terms = self._tokenize(query)
+        if not query_terms or not self.chunks:
+            return []
+        clean_q = re.sub(r"[^\w\u4e00-\u9fa5]", "", query.lower())
+        scored_results = []
         for chunk in self.chunks:
             content = chunk.content
             c_lower = content.lower()
             matched_terms = [t for t in set(query_terms) if t in c_lower]
             if not matched_terms:
                 continue
-
-            # 词项加权（长度>1 的词项如双字词赋予更高权重）
             term_weight = sum(2.0 if len(t) > 1 else 0.8 for t in matched_terms)
             coverage = len(matched_terms) / max(1, len(set(query_terms)))
-
-            # 连续字串匹配（LCS 相似度加分）
             clean_c = re.sub(r"[^\w\u4e00-\u9fa5]", "", c_lower)
             lcs_bonus = 0.0
             for span_len in (5, 4, 3, 2):
                 found = False
                 for start in range(len(clean_q) - span_len + 1):
-                    sub = clean_q[start:start+span_len]
-                    if sub in clean_c:
+                    if clean_q[start:start + span_len] in clean_c:
                         lcs_bonus += 0.35 * (span_len / 2.0)
                         found = True
                         break
                 if found:
                     break
-
             final_score = round(min(1.0, 0.45 * coverage + 0.30 * (term_weight / (len(query_terms) + 2)) + 0.25 * min(1.0, lcs_bonus)), 4)
-
             if final_score >= score_threshold:
                 c_dict = chunk.to_dict()
                 c_dict["score"] = final_score
                 c_dict["matched_terms"] = matched_terms[:6]
+                c_dict["retrieval"] = "baseline"
                 scored_results.append(c_dict)
-
         scored_results.sort(key=lambda x: x["score"], reverse=True)
         return scored_results[:top_k]
 
@@ -707,6 +918,33 @@ def search_relevant_chunks(
     return retriever.search(query, top_k=top_k, score_threshold=score_threshold)
 
 
+def search_materials_tool(
+    query: str,
+    docs: Union[str, List[Union[str, Dict[str, Any]]]],
+    top_k: int = 3,
+    score_threshold: float = 0.10,
+) -> Dict[str, Any]:
+    """Agent 工具：在材料库中检索原文；只读、无副作用。"""
+    try:
+        hits = search_relevant_chunks(query, docs, top_k=top_k, score_threshold=score_threshold)
+        return {
+            "success": True,
+            "tool": "search_materials",
+            "query": query,
+            "hits": hits,
+            "error": None,
+        }
+    except Exception as e:
+        logger.exception("search_materials 工具异常")
+        return {
+            "success": False,
+            "tool": "search_materials",
+            "query": query,
+            "hits": [],
+            "error": classify_exception(e, stage="search_materials"),
+        }
+
+
 # ==================== 10.27：先查材料再回答 (RAG 问答) ====================
 
 def ask_question_with_rag(
@@ -725,11 +963,18 @@ def ask_question_with_rag(
             "answer": "问题不能为空",
             "found_evidence": False,
             "evidence_chunks": [],
-            "error": "问题不能为空",
+            "error": ai_error("ASK_EMPTY", "问题不能为空", stage="validate_input", retryable=False),
         }
 
-    # 1. 先查材料：通过 10.26 检索器在材料库中检索相关片段
-    relevant_chunks = search_relevant_chunks(question, docs, top_k=top_k, score_threshold=0.10)
+    # 1. 先查材料：通过 search_materials 工具在材料库中检索相关片段
+    search_result = search_materials_tool(question, docs, top_k=top_k, score_threshold=0.10)
+    relevant_chunks = search_result.get("hits") or []
+    rag_tool_trace = [{
+        "step": 1,
+        "tool": "search_materials",
+        "arguments": {"query": question, "top_k": top_k},
+        "result": {"total": len(relevant_chunks), "success": search_result.get("success")},
+    }]
 
     # 若检索不到任何相关片段，直接判定无依据，绝不瞎编
     if not relevant_chunks:
@@ -738,6 +983,7 @@ def ask_question_with_rag(
             "answer": f"【未找到依据】现有材料中未提及与“{question}”相关的内容或要求。",
             "found_evidence": False,
             "evidence_chunks": [],
+            "tool_trace": rag_tool_trace,
             "error": None,
         }
 
@@ -797,6 +1043,7 @@ def ask_question_with_rag(
             "answer": answer,
             "found_evidence": found,
             "evidence_chunks": relevant_chunks,
+            "tool_trace": rag_tool_trace,
             "error": None,
         }
     except Exception as e:
@@ -812,14 +1059,18 @@ def ask_question_with_rag(
                 "answer": fallback_answer.strip(),
                 "found_evidence": True,
                 "evidence_chunks": relevant_chunks,
-                "error": "API 额度不足（insufficient_user_quota），已展示本地检索原文",
+                "tool_trace": rag_tool_trace,
+                "error": ai_error("AI_QUOTA", "API 额度不足，已展示本地检索原文",
+                                  stage="rag", retryable=False, detail=err_msg),
             }
+        err = classify_exception(e, stage="rag")
         return {
             "success": False,
             "answer": "问答处理异常，请稍后重试",
             "found_evidence": False,
             "evidence_chunks": relevant_chunks,
-            "error": err_msg,
+            "tool_trace": rag_tool_trace,
+            "error": err,
         }
 
 
@@ -915,7 +1166,16 @@ def _coerce_deadline_datetime(value: Any) -> Optional[datetime]:
 
 
 def _normalize_deadline_value(value: Any) -> Any:
-    """图片模型常返回中文日期字符串；统一成 Matter 需要的 deadline 对象。"""
+    """图片模型常返回中文日期字符串/数组；统一成 Matter 需要的 deadline 对象。"""
+    if isinstance(value, list):
+        candidates = [v for v in value if isinstance(v, dict)]
+        candidates = [v for v in candidates if _coerce_deadline_datetime(v.get("due_at"))]
+        if not candidates:
+            return None
+        chosen = min(candidates, key=lambda v: _coerce_deadline_datetime(v.get("due_at")))
+        result = copy.deepcopy(chosen)
+        result["due_at"] = _coerce_deadline_datetime(result.get("due_at")).isoformat()
+        return result
     if isinstance(value, dict):
         result = copy.deepcopy(value)
         due = _coerce_deadline_datetime(result.get("due_at"))
@@ -1324,12 +1584,18 @@ def compare_notifications(
     if not original_matter:
         original_res = analyze_notification(original_text)
         if not original_res.get("success"):
-            return {"success": False, "data": None, "error": f"原通知解析失败：{original_res.get('error')}"}
+            err = original_res.get("error")
+            return {"success": False, "data": None,
+                    "error": ai_error("AI_COMPARE_ORIGINAL", "原通知解析失败：" + message_of(err),
+                                      stage="compare", retryable=True, detail=str(err))}
         original_matter = original_res["data"]
     if not supplement_matter:
         supplement_res = analyze_notification(supplement_text)
         if not supplement_res.get("success"):
-            return {"success": False, "data": None, "error": f"补充通知解析失败：{supplement_res.get('error')}"}
+            err = supplement_res.get("error")
+            return {"success": False, "data": None,
+                    "error": ai_error("AI_COMPARE_SUPPLEMENT", "补充通知解析失败：" + message_of(err),
+                                      stage="compare", retryable=True, detail=str(err))}
         supplement_matter = supplement_res["data"]
 
     diff = _build_notice_diff(original_matter, supplement_matter, original_text, supplement_text)
@@ -1651,6 +1917,16 @@ def _apply_date_result(
     matter = copy.deepcopy(matter or {})
     matter["date_check"] = result
     matter["tool_trace"] = trace
+    workflow = list(matter.get("workflow_trace") or [])
+    workflow.append({
+        "step": len(workflow) + 1,
+        "name": "date_tool",
+        "status": "ok" if result.get("success") else "failed",
+        "detail": "check_date · %s" % (result.get("suggestion") or result.get("error") or ""),
+        "tool": "check_date",
+        "mode": mode,
+    })
+    matter["workflow_trace"] = workflow
 
     suggestions: List[str] = []
     if result.get("success"):
@@ -1829,6 +2105,15 @@ def run_date_check_tool_loop(
             "error": "清单中没有截止时间，未调用 check_date",
         }
         matter["tool_trace"] = []
+        workflow = list(matter.get("workflow_trace") or [])
+        workflow.append({
+            "step": len(workflow) + 1,
+            "name": "date_tool",
+            "status": "skipped",
+            "detail": "没有截止时间，跳过 check_date",
+            "tool": "check_date",
+        })
+        matter["workflow_trace"] = workflow
         matter["suggestions"] = list(matter.get("suggestions") or []) + [
             "通知里没有明确截止时间，请手动补充后再核对。"
         ]

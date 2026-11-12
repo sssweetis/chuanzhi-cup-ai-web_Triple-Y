@@ -24,6 +24,8 @@ PAIRS = [
      os.path.join(HERE, "..", "src", "service.py")),
     ("prompt.py", os.path.join(HERE, "prompt.py"),
      os.path.join(HERE, "..", "src", "prompt.py")),
+    ("ai_error.py", os.path.join(HERE, "ai_error.py"),
+     os.path.join(HERE, "..", "src", "ai_error.py")),
 ]
 
 

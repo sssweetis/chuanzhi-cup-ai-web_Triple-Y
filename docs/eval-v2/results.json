@@ -1,0 +1,349 @@
+{
+  "generated_at": "2026-11-12T18:59:50",
+  "model": "deepseek-flash",
+  "base_url": "https://api.deepseek.com",
+  "summary": {
+    "total": 35,
+    "pass": 35,
+    "rate": 1.0,
+    "by_kind": {
+      "text": {
+        "total": 10,
+        "pass": 10
+      },
+      "image": {
+        "total": 4,
+        "pass": 4
+      },
+      "pdf": {
+        "total": 3,
+        "pass": 3
+      },
+      "compare": {
+        "total": 3,
+        "pass": 3
+      },
+      "rag": {
+        "total": 15,
+        "pass": 15
+      }
+    }
+  },
+  "results": [
+    {
+      "kind": "text",
+      "id": "T01",
+      "label": "请于2026年11月20日18:00前提交奖学金报名",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 15805,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T02",
+      "label": "关于开展2026年社会实践活动的通知：请各团队于11",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 29858,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T03",
+      "label": "2026年校园创新挑战赛报名：请于12月1日12:0",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 27389,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T04",
+      "label": "请于11月30日前将身份证复印件交到学院办公室A20",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 24913,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T05",
+      "label": "关于国家助学金申请的通知：请于11月22日18:00",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 15579,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T06",
+      "label": "请于2026年12月5日17:00前提交社团活动立项",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 22434,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T07",
+      "label": "请于2026年11月28日18:00前提交报名表；学",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 34684,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T08",
+      "label": "请于2026年12月10日17:00前提交项目总结报",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 27085,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T09",
+      "label": "请于2026年11月19日12:00前提交电子版报名",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 13060,
+      "error": null
+    },
+    {
+      "kind": "text",
+      "id": "T10",
+      "label": "请于2026年12月15日前提交纸质版申请书、身份证",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓; 步骤=✓",
+      "elapsed_ms": 22122,
+      "error": null
+    },
+    {
+      "kind": "image",
+      "id": "I01",
+      "label": "assets/I01.png",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 23823,
+      "error": null
+    },
+    {
+      "kind": "image",
+      "id": "I02",
+      "label": "assets/I02.png",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 6550,
+      "error": null
+    },
+    {
+      "kind": "image",
+      "id": "I03",
+      "label": "assets/I03.png",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 5630,
+      "error": null
+    },
+    {
+      "kind": "image",
+      "id": "I04",
+      "label": "assets/I04.png",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 3758,
+      "error": null
+    },
+    {
+      "kind": "pdf",
+      "id": "P01",
+      "label": "assets/P01.pdf",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 4084,
+      "error": null
+    },
+    {
+      "kind": "pdf",
+      "id": "P02",
+      "label": "assets/P02.pdf",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 37460,
+      "error": null
+    },
+    {
+      "kind": "pdf",
+      "id": "P03",
+      "label": "assets/P03.pdf",
+      "ok": true,
+      "detail": "标题=✓; 截止=✓; 材料=✓",
+      "elapsed_ms": 21753,
+      "error": null
+    },
+    {
+      "kind": "compare",
+      "id": "C01",
+      "label": "补充通知对比",
+      "ok": true,
+      "detail": "deadline=True ; new_material=True",
+      "elapsed_ms": 17004,
+      "error": null
+    },
+    {
+      "kind": "compare",
+      "id": "C02",
+      "label": "补充通知对比",
+      "ok": true,
+      "detail": "deadline=True ; new_material=True",
+      "elapsed_ms": 24717,
+      "error": null
+    },
+    {
+      "kind": "compare",
+      "id": "C03",
+      "label": "补充通知对比",
+      "ok": true,
+      "detail": "deadline=True ; new_material=True",
+      "elapsed_ms": 13855,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R01",
+      "label": "视频有什么要求",
+      "ok": true,
+      "detail": "top=['视频要求']",
+      "elapsed_ms": 2,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R02",
+      "label": "材料交到哪里",
+      "ok": true,
+      "detail": "top=['奖学金通知']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R03",
+      "label": "报名费多少钱",
+      "ok": true,
+      "detail": "top=['缴费与审核', '奖学金通知']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R04",
+      "label": "推荐信是必交吗",
+      "ok": true,
+      "detail": "top=['奖学金通知']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R05",
+      "label": "成绩单需要吗",
+      "ok": true,
+      "detail": "top=['奖学金通知']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R06",
+      "label": "审核通过后做什么",
+      "ok": true,
+      "detail": "top=['缴费与审核']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R07",
+      "label": "安全承诺书谁签字",
+      "ok": true,
+      "detail": "top=['安全承诺']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R08",
+      "label": "视频格式是什么",
+      "ok": true,
+      "detail": "top=['视频要求']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R09",
+      "label": "活动期间要报备吗",
+      "ok": true,
+      "detail": "top=['安全承诺']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R10",
+      "label": "准考证什么时候打印",
+      "ok": true,
+      "detail": "top=['缴费与审核']",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R11",
+      "label": "食堂几点开门",
+      "ok": true,
+      "detail": "hits=0",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R12",
+      "label": "宿舍怎么申请",
+      "ok": true,
+      "detail": "hits=0",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R13",
+      "label": "图书馆开放时间",
+      "ok": true,
+      "detail": "hits=0",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R14",
+      "label": "校车路线",
+      "ok": true,
+      "detail": "hits=0",
+      "elapsed_ms": 0,
+      "error": null
+    },
+    {
+      "kind": "rag",
+      "id": "R15",
+      "label": "网络密码是多少",
+      "ok": true,
+      "detail": "hits=0",
+      "elapsed_ms": 0,
+      "error": null
+    }
+  ]
+}

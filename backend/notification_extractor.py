@@ -710,10 +710,17 @@ def validate_matter(data: Dict) -> Tuple[bool, Optional[str]]:
 class LLMClient:
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model: Optional[str] = None, timeout: int = 60):
         cfg = self._load_local_config()
-        self.api_key = api_key or cfg.get("LLM_API_KEY") or os.getenv("LLM_API_KEY", "")
-        self.base_url = base_url or cfg.get("LLM_BASE_URL") or os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-        self.model = model or cfg.get("LLM_MODEL") or os.getenv("LLM_MODEL", "gpt-4o")
-        self.timeout = cfg.get("LLM_TIMEOUT") or timeout
+        # 环境变量优先：部署时以 .env / 平台环境变量为准，
+        # config_local.py 只作为本机开发兜底，避免旧本地配置覆盖团队 Key。
+        self.api_key = api_key or os.getenv("LLM_API_KEY") or cfg.get("LLM_API_KEY") or ""
+        self.base_url = (base_url or os.getenv("LLM_BASE_URL")
+                         or cfg.get("LLM_BASE_URL") or "https://api.deepseek.com")
+        self.model = model or os.getenv("LLM_MODEL") or cfg.get("LLM_MODEL") or "deepseek-flash"
+        raw_timeout = os.getenv("LLM_TIMEOUT") or cfg.get("LLM_TIMEOUT") or timeout
+        try:
+            self.timeout = int(raw_timeout)
+        except (TypeError, ValueError):
+            self.timeout = 60
 
     @staticmethod
     def _load_local_config() -> Dict:
@@ -803,6 +810,23 @@ class MatterExtractor:
         
         if isinstance(raw.get("deadline"), str):
             raw["deadline"] = {"scope": "overall", "label": "截止时间", "due_at": raw["deadline"]}
+
+        # 模型在复杂通知里可能返回 deadline 数组（如“提交截止 + 缴费截止”）。
+        # Matter Schema 只允许一个 overall deadline；保留最早的一项，其余信息
+        # 仍由 step_list / warning_list 承载，避免整个解析因 Schema 失败。
+        if isinstance(raw.get("deadline"), list):
+            candidates = [d for d in raw["deadline"] if isinstance(d, dict) and parse_iso(d.get("due_at"))]
+            if candidates:
+                chosen = min(candidates, key=lambda d: parse_iso(d.get("due_at")))
+                raw["deadline"] = chosen
+                raw.setdefault("warning_list", []).append({
+                    "warning_id": f"warn_{uuid.uuid4().hex[:6]}",
+                    "warning_type": "multiple_deadlines",
+                    "severity": "medium",
+                    "message": "识别到多个截止时间，总截止已采用最早的一项；其余节点请查看步骤。",
+                })
+            else:
+                raw["deadline"] = None
 
         if isinstance(raw.get("title"), dict):
             raw["title"] = raw["title"].get("text") or raw["title"].get("title") or "未命名事项"

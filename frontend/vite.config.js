@@ -1,4 +1,5 @@
-﻿import { defineConfig } from 'vite'
+import { defineConfig } from 'vite'
+import { resolve } from 'node:path'
 
 export default defineConfig({
   server: {
@@ -25,5 +26,13 @@ export default defineConfig({
       },
     },
   },
-  build: { outDir: 'dist' }
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: resolve(process.cwd(), 'index.html'),
+        errorLab: resolve(process.cwd(), 'error-lab.html'),
+      },
+    },
+  },
 })

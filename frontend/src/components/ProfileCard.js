@@ -1,15 +1,17 @@
 import { state } from '../state.js'
+import { escapeHtml } from '../util.js'
 
 export function renderProfileCard(mount) {
   const av = state.profile.avatarUrl
+  const nick = escapeHtml(state.profile.nick || 'Triple')
   mount.innerHTML = `
     <div class="card profile">
-      <div class="avatar" id="avatarBox">${av ? `<img src="${av}" alt="">` : (state.profile.nick || 'T').charAt(0).toUpperCase()}</div>
+      <div class="avatar" id="avatarBox">${av ? `<img src="${escapeHtml(av)}" alt="" loading="lazy" decoding="async">` : nick.charAt(0).toUpperCase()}</div>
       <div class="who">
-        <div class="nick">${state.profile.nick || 'Triple'}</div>
-        <div class="hi">hi, ${state.profile.nick || 'Triple'}! 今天也要稳稳推进</div>
+        <div class="nick">${nick}</div>
+        <div class="hi">hi, ${nick}! 今天也要稳稳推进</div>
       </div>
-      <button class="btn btn-ghost btn-sm" id="openUserModal">个人中心</button>
+      <button class="btn btn-ghost btn-sm profile-action" id="openUserModal">个人中心</button>
     </div>`
   if (!av) document.getElementById('avatarBox').style.background = state.profile.color
   mount.querySelector('#openUserModal').onclick = async () => {

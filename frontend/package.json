@@ -6,10 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint \"src/**/*.{js,ts}\"",
+    "ci": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "format": "prettier --write \"src/**/*.{js,ts,css}\" \"public/prototypes/**/*.{html,css,js}\"",
+    "format:check": "prettier --check \"src/**/*.{js,ts,css}\" \"public/prototypes/**/*.{html,css,js}\"",
+    "capture:errors": "node scripts/capture-error-states.mjs"
   },
-  "dependencies": {},
   "devDependencies": {
-    "vite": "^5.4.0"
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "jsdom": "^25.0.1",
+    "lighthouse": "^12.3.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.9"
   }
 }

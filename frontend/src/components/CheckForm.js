@@ -1,21 +1,25 @@
 // 用户情况填写（C 对齐 10/20）：
 // POST /api/check body = { matter: state.analyzeResult, profile:{people_count,has_doc,has_video,has_teacher_confirm}, checked_material_ids }
 // 后端返回 checked / missing_required / missing_optional / need_confirm / profile_issues / summary → 前端映射成三类
+// @ts-nocheck -- 渐进迁移：待材料核对接口类型补齐后移除。
 import { state, setState } from '../state.js'
 import { checkProfile } from '../api2.js'
+import { escapeHtml, setButtonBusy } from '../util.js'
+import { userErrorMessage } from '../errors.js'
 
 const FALLBACK_MATERIALS = [
   { id: 'm1', name: '作品演示视频（≤3 分钟）' },
   { id: 'm2', name: '项目说明文档（PPT）' },
   { id: 'm3', name: '成绩单复印件' },
-  { id: 'm4', name: '报名表' }
+  { id: 'm4', name: '报名表' },
 ]
 
 export function renderCheckForm(mount) {
   // 材料列表优先从最近解析结果取，没有解析结果时用示例列表
-  const materials = Array.isArray(state.analyzeResult && state.analyzeResult.materials) && state.analyzeResult.materials.length
-    ? state.analyzeResult.materials.map(m => ({ id: m.material_id, name: m.material_name }))
-    : FALLBACK_MATERIALS
+  const materials =
+    Array.isArray(state.analyzeResult && state.analyzeResult.materials) && state.analyzeResult.materials.length
+      ? state.analyzeResult.materials.map((m) => ({ id: m.material_id, name: m.material_name }))
+      : FALLBACK_MATERIALS
 
   mount.innerHTML = `
     <div class="card">
@@ -35,7 +39,7 @@ export function renderCheckForm(mount) {
         <select id="fHasTeacher"><option value="unknown">不确定</option><option value="yes">需要</option><option value="no">不需要</option></select>
       </div>
       <div class="field"><label>已备材料</label>
-        ${materials.map(m => `<label class="chk"><input type="checkbox" value="${m.id}"> ${m.name}</label>`).join('')}
+        ${materials.map((m) => `<label class="chk"><input type="checkbox" value="${escapeHtml(m.id)}"> <span>${escapeHtml(m.name)}</span></label>`).join('')}
       </div>
       <div class="in-foot">
         <button class="btn btn-primary" id="checkBtn">提交核对</button>
@@ -44,9 +48,10 @@ export function renderCheckForm(mount) {
     </div>`
 
   function renderBuckets(b) {
-    const row = (cls, label, items, emoji) => items && items.length
-      ? `<div class="bucket ${cls}"><div class="bucket-head">${emoji} ${label}（${items.length}）</div><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul></div>`
-      : `<div class="bucket ${cls}"><div class="bucket-head">${emoji} ${label}（0）</div><div class="bucket-empty">无</div></div>`
+    const row = (cls, label, items, emoji) =>
+      items && items.length
+        ? `<div class="bucket ${cls}"><div class="bucket-head">${emoji} ${label}（${items.length}）</div><ul>${items.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>`
+        : `<div class="bucket ${cls}"><div class="bucket-head">${emoji} ${label}（0）</div><div class="bucket-empty">无</div></div>`
     return `<div class="buckets">
       ${row('b-ok', '已准备', b.ready, '✅')}
       ${row('b-bad', '缺少', b.missing, '❌')}
@@ -55,9 +60,12 @@ export function renderCheckForm(mount) {
   }
 
   mount.querySelector('#checkBtn').onclick = async () => {
-    const checked = Array.from(mount.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value)
+    const checked = Array.from(mount.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value)
     // "不确定"的 key 不传，避免被当成 false
-    const profile = { people_count: Number(mount.querySelector('#fPeopleCount').value), grade: mount.querySelector('#fGrade').value }
+    const profile = {
+      people_count: Number(mount.querySelector('#fPeopleCount').value),
+      grade: mount.querySelector('#fGrade').value,
+    }
     const doc = mount.querySelector('#fHasDoc').value
     const video = mount.querySelector('#fHasVideo').value
     const teacher = mount.querySelector('#fHasTeacher').value
@@ -66,7 +74,10 @@ export function renderCheckForm(mount) {
     if (teacher !== 'unknown') profile.has_teacher_confirm = teacher === 'yes'
 
     const box = mount.querySelector('#checkResult')
-    box.textContent = '核对中…'
+    const btn = mount.querySelector('#checkBtn')
+    setButtonBusy(btn, true, '核对中…')
+    box.innerHTML =
+      '<div class="loading-inline"><span class="spinner spinner-dark" aria-hidden="true"></span><span>正在核对材料…</span></div>'
     try {
       const body = { profile, checked_material_ids: checked }
       if (state.analyzeResult) body.matter = state.analyzeResult
@@ -75,18 +86,23 @@ export function renderCheckForm(mount) {
       const buckets = {
         ready: res.checked || [],
         missing: [...(res.missing_required || []), ...(res.missing_optional || [])],
-        needConfirm: [...(res.need_confirm || []), ...(res.profile_issues || [])]
+        needConfirm: [...(res.need_confirm || []), ...(res.profile_issues || [])],
       }
       box.innerHTML = renderBuckets(buckets)
     } catch (err) {
       // 后端没通：本地兜底
-      const ready = [], missing = [], needConfirm = []
-      materials.forEach(m => (checked.includes(m.id) ? ready : missing).push(m.name))
+      const ready = [],
+        missing = [],
+        needConfirm = []
+      materials.forEach((m) => (checked.includes(m.id) ? ready : missing).push(m.name))
       if (doc === 'unknown') needConfirm.push('说明文档是否必须？需向主办方确认')
       if (video === 'unknown') needConfirm.push('演示视频是否必须？需向主办方确认')
       if (teacher === 'unknown') needConfirm.push('指导老师签字要求？需向主办方确认')
-      box.innerHTML = renderBuckets({ ready, missing, needConfirm }) +
-        `<div class="error-box" style="margin-top:8px">后端暂未连通，以上为前端本地分类：${err.message}</div>`
+      box.innerHTML =
+        renderBuckets({ ready, missing, needConfirm }) +
+        `<div class="error-box compact">核对服务暂时不可用，以上为本地分类。${escapeHtml(userErrorMessage(err, '请稍后重试。'))}</div>`
+    } finally {
+      setButtonBusy(btn, false)
     }
   }
 }

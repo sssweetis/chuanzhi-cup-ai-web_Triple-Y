@@ -6,10 +6,11 @@
 ```bash
 cd frontend
 npm install
-$env:VITE_API_BASE_URL="http://localhost:8000"
 npm run dev
 ```
 打开 http://localhost:5173
+
+开发时 `/api` 由 Vite 同源代理到本机后端，前端不读取 API 环境变量。
 
 ## 功能
 - 文字通知 / 截图 / PDF → AI 解析成结构化结果
@@ -22,13 +23,36 @@ npm run dev
 ## 目录
 ```
 src/
-  api.js            接口封装（带 X-Session-Id）
-  state.js         全局状态
+  api2.ts           当前 API 层（保留 X-Session-Id）
+  api2.js           渐进迁移兼容入口
+  errors.ts         错误状态与 ErrorState
+  state.ts          全局状态与持久化
+  util.ts           Toast、按钮忙碌态、模态框可访问性
   components/
-    ProfileCard.js  用户卡片
-    Calendar.js     月历
-    InputPanel.js   输入+解析+材料库+追问
-    ModeCard.js     结果卡片渲染
-    TaskList.js     任务清单+历史+搜索+导出
-    UserModal.js    个人中心
+    AnalysisProgress.js  解析阶段
+    InputPanel.js        输入、解析、对比、材料库
+    ModeCard.js          结果展示（按需加载）
+    Calendar.js          并行截止日
+    TaskList.js          任务清单、历史、CSV
+  tests/
+docs/frontend/
 ```
+
+## 工程命令
+
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run ci
+npm run capture:errors
+```
+
+## 前端文档
+
+- `docs/frontend/engineering.md`
+- `docs/frontend/error-states.md`
+- `docs/frontend/performance.md`
+- `docs/frontend/user-testing-kit.md`
+- `docs/frontend/video-script.md`

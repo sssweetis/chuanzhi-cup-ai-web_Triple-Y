@@ -1,20 +1,29 @@
+// @ts-nocheck -- 渐进迁移：入口在组件迁移完成后补严格 DOM 类型。
 import './styles.css'
-import { state } from './state.js'
 import { renderProfileCard } from './components/ProfileCard.js'
 import { renderCalendar } from './components/Calendar.js'
 import { renderInputPanel } from './components/InputPanel.js'
 import { renderTaskList } from './components/TaskList.js'
+import { closeModal, initModalA11y, openModal } from './util.js'
 
 function boot() {
+  initModalA11y()
   const app = document.getElementById('app')
   app.innerHTML = `
-    <div id="splash" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#a5a0f0 0%,#8b86e8 60%,#6f68d8 100%);transition:opacity .8s ease;">
-      <div style="color:#fff;font-size:88px;font-weight:800;letter-spacing:2px;text-shadow:0 8px 40px rgba(255,255,255,.25);opacity:0;transform:scale(.8);animation:spIn 1.2s cubic-bezier(.2,.8,.2,1) forwards;">Triple Y</div>
+    <div id="splash" class="splash" role="presentation">
+      <div class="splash-mark">Triple Y</div>
     </div>
-    <style>@keyframes spIn{to{opacity:1;transform:scale(1);}}</style>
-    <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
     <div class="app">
-      <div class="topbar"><h1>Triple Y<span>·</span>通知转任务</h1><div class="slogan">粘贴一段通知，剩下的我帮你记着</div><button class="btn btn-ghost btn-sm" id="helpBtn">❓ 使用说明</button></div>
+      <header class="topbar">
+        <div class="brand-block">
+          <h1>Triple Y<span>·</span>通知转任务</h1>
+          <div class="slogan">粘贴一段通知，剩下的我帮你记着</div>
+        </div>
+        <div class="topbar-actions">
+          <a class="btn btn-ghost btn-sm prototype-link" href="/prototypes/index.html" target="_blank" rel="noopener">新版样板</a>
+          <button class="btn btn-ghost btn-sm" id="helpBtn"><span class="help-icon" aria-hidden="true">?</span>使用说明</button>
+        </div>
+      </header>
       <div class="layout">
         <div class="left">
           <div id="profileMount"></div>
@@ -27,11 +36,22 @@ function boot() {
       </div>
     </div>`
   renderAll()
-  setTimeout(() => {
-    const s = document.getElementById('splash')
-    if (s) { s.style.opacity = '0'; setTimeout(() => s.remove(), 900) }
-  }, 1800)
-  state.onUpdate = renderAll
+  const splash = document.getElementById('splash')
+  const splashSeen = sessionStorage.getItem('triple-y-splash-seen') === '1'
+  const dismissSplash = () => {
+    if (!splash || splash.classList.contains('is-leaving')) return
+    splash.classList.add('is-leaving')
+    sessionStorage.setItem('triple-y-splash-seen', '1')
+    window.setTimeout(() => splash.remove(), 150)
+  }
+  if (splashSeen) splash.remove()
+  else {
+    splash.addEventListener('click', dismissSplash)
+    window.setTimeout(dismissSplash, 650)
+  }
+  window.addEventListener('zhiban:state-change', (event) => {
+    renderChanged(event.detail && event.detail.keys)
+  })
   // 倒计时只刷新任务列表，避免重渲染输入框导致正在填的内容被重置
   setInterval(() => renderTaskList(document.getElementById('listMount')), 60000)
 
@@ -43,7 +63,8 @@ function boot() {
       mask.id = 'helpMask'
       mask.className = 'mask'
       mask.innerHTML = `<div class="modal">
-        <h3>❓ 三步上手</h3>
+        <div class="modal-kicker">使用说明</div>
+        <h3>三步上手</h3>
         <ol class="help-list">
           <li><b>粘贴通知</b>：把辅导员/群里的通知原文粘到输入框，或点"📷 截图"上传通知截图。</li>
           <li><b>点"AI 智能解析"</b>：自动拆出截止时间、流程步骤、材料清单。</li>
@@ -53,10 +74,9 @@ function boot() {
         <div class="modal-foot"><button class="btn btn-primary" id="helpClose">开始使用</button></div>
       </div>`
       document.body.appendChild(mask)
-      mask.onclick = (e) => { if (e.target === mask) mask.classList.remove('show') }
-      mask.querySelector('#helpClose').onclick = () => mask.classList.remove('show')
+      mask.querySelector('#helpClose').onclick = () => closeModal(mask)
     }
-    mask.classList.add('show')
+    openModal(mask, { initialFocus: '#helpClose' })
   }
 }
 
@@ -65,6 +85,22 @@ function renderAll() {
   renderCalendar(document.getElementById('calMount'))
   renderInputPanel(document.getElementById('inputMount'))
   renderTaskList(document.getElementById('listMount'))
+}
+
+function renderChanged(keys = []) {
+  const changed = new Set(keys)
+  if (!changed.size) {
+    renderAll()
+    return
+  }
+  if (changed.has('profile')) renderProfileCard(document.getElementById('profileMount'))
+  if (changed.has('tasks') || changed.has('focusDate')) renderCalendar(document.getElementById('calMount'))
+  if (['analyzeResult', 'resultFromImage'].some((key) => changed.has(key))) {
+    renderInputPanel(document.getElementById('inputMount'))
+  }
+  if (changed.has('tasks') || changed.has('focusDate') || changed.has('activeTab')) {
+    renderTaskList(document.getElementById('listMount'))
+  }
 }
 
 boot()

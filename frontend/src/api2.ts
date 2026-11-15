@@ -16,11 +16,25 @@ export interface RequestOptions {
   timeoutWarningMs?: number
 }
 
+const EXPLICIT_AI_ERROR_CODES: Record<string, AppErrorCode> = {
+  AI_NO_KEY: 'auth',
+  AI_AUTH: 'auth',
+  AI_QUOTA: 'server_error',
+  AI_RATE_LIMIT: 'rate_limited',
+  AI_TIMEOUT: 'timeout',
+  AI_NETWORK: 'network',
+  AI_SCHEMA: 'invalid_response',
+  AI_EMPTY: 'empty_result',
+  AI_PARSE_FAILED: 'invalid_response',
+  AI_UNKNOWN: 'server_error',
+}
+
 function payloadCode(status: number, payload: ApiErrorPayload): AppErrorCode {
   const detail = payload.error
   const detailCode = detail && typeof detail === 'object' ? detail.code || '' : ''
   const detailMessage = detail && typeof detail === 'object' ? detail.message || '' : detail || ''
   const value = `${payload.error_code || ''} ${detailCode} ${detailMessage}`.toLowerCase()
+  if (detailCode && EXPLICIT_AI_ERROR_CODES[detailCode]) return EXPLICIT_AI_ERROR_CODES[detailCode]
   if (status === 429 || /rate.?limit|too many requests|请求过多/.test(value)) return 'rate_limited'
   if (status === 413 || /too large|payload too large|文件过大|超过.*大小/.test(value)) return 'file_too_large'
   if (status === 415 || /unsupported media|unsupported file|不支持.*格式/.test(value)) return 'unsupported_media'
@@ -34,10 +48,12 @@ function payloadCode(status: number, payload: ApiErrorPayload): AppErrorCode {
 }
 
 function responseError(status: number, payload: ApiErrorPayload, path: string, cause?: unknown): AppError {
+  const detail = payload.error
+  const detailRequestId = detail && typeof detail === 'object' ? detail.request_id || '' : ''
   return new AppError({
     code: payloadCode(status, payload),
     status,
-    requestId: payload.request_id,
+    requestId: detailRequestId || payload.request_id,
     cause: cause || { path, status, error: payload.error, errorCode: payload.error_code },
   })
 }

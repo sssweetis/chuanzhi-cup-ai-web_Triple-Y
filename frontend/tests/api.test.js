@@ -72,6 +72,30 @@ describe('api cancellation and response mapping', () => {
     })
   })
 
+  it.each([
+    ['AI_AUTH', 'auth'],
+    ['AI_QUOTA', 'server_error'],
+    ['AI_TIMEOUT', 'timeout'],
+    ['AI_EMPTY', 'empty_result'],
+    ['AI_SCHEMA', 'invalid_response'],
+  ])('maps %s from an HTTP 200 error envelope', async (serverCode, expectedCode) => {
+    const { analyzeNotification } = await loadApi()
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: false,
+        data: null,
+        error: { code: serverCode, message: 'structured AI failure', request_id: 'req-ai-structured' },
+      }),
+    }))
+    await expect(analyzeNotification('通知')).rejects.toMatchObject({
+      code: expectedCode,
+      status: 200,
+      requestId: 'req-ai-structured',
+    })
+  })
+
   it('keeps the existing X-Session-Id header', async () => {
     const { analyzeNotification } = await loadApi()
     globalThis.fetch = vi.fn(async () => ({

@@ -718,7 +718,7 @@ export function renderInputPanel(mount) {
       const res = await askQuestion({ question: q })
       const noEvidence = res.found_evidence === false
       const banner = noEvidence
-        ? '<div class="notice notice-warn">⚠ 材料中未找到相关依据，以上为通用回答，请自行核对原文</div>'
+        ? '<div class="notice notice-warn">未找到依据，已停止生成。请补充材料或调整问题后再试。</div>'
         : ''
       const chunks = res.evidence_chunks || res.sources || []
       const chunkHtml = chunks.length
@@ -730,7 +730,9 @@ export function renderInputPanel(mount) {
             )
             .join('')
         : ''
-      out.innerHTML = banner + `<div class="answer-box">${esc(res.answer || '')}</div>` + chunkHtml
+      out.innerHTML = noEvidence
+        ? banner
+        : banner + `<div class="answer-box">${esc(res.answer || '')}</div>` + chunkHtml
     } catch (error) {
       renderErrorState(out, normalizeError(error), {
         onRetry: () => mount.querySelector('#askBtn').click(),

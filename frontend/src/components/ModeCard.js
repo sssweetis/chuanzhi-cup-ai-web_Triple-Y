@@ -67,6 +67,34 @@ function safeUrl(value) {
   }
 }
 
+function traceText(value) {
+  try {
+    const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+    return text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text
+  } catch {
+    return String(value || '')
+  }
+}
+
+function traceBlock(title, items) {
+  if (!Array.isArray(items) || !items.length) return ''
+  return `<details class="trace-detail">
+    <summary>${esc(title)}（${items.length}）</summary>
+    <div class="trace-list">
+      ${items
+        .map((item, index) => {
+          const label = item?.tool || item?.name || item?.step_name || item?.node || `步骤 ${index + 1}`
+          const status = item?.status ? ` · ${item.status}` : ''
+          return `<details class="trace-item">
+            <summary>${esc(label)}${esc(status)}</summary>
+            <pre>${esc(traceText(item))}</pre>
+          </details>`
+        })
+        .join('')}
+    </div>
+  </details>`
+}
+
 export function renderMatter(m) {
   if (!m) return ''
   try {
@@ -267,6 +295,16 @@ function _render(m) {
       m.diff.affected_todos.forEach((t) => (html += `<li>· ${esc(t)}</li>`))
       html += `</ul><button class="btn btn-primary btn-sm" id="confirmUpdateBtn">确认更新任务清单</button></div>`
     }
+  }
+
+  const traceHtml = [traceBlock('工具调用轨迹', m.tool_trace), traceBlock('工作流轨迹', m.workflow_trace)]
+    .filter(Boolean)
+    .join('')
+  if (traceHtml) {
+    html += `<details class="trace-detail trace-detail-main">
+      <summary>处理轨迹</summary>
+      <div class="trace-groups">${traceHtml}</div>
+    </details>`
   }
 
   html += '</div>'

@@ -25,6 +25,22 @@ export function renderCheckForm(mount) {
     <div class="card check-card">
       <div class="list-title">材料核对</div>
       <div class="sub">勾选已经准备好的材料，系统会整理成"已准备 / 缺少 / 需要确认"</div>
+      <div class="field"><label>团队人数</label><input type="number" id="fPeopleCount" value="3" min="1" max="10"></div>
+      <div class="field"><label>年级</label>
+        <select id="fGrade">
+          <option value="freshman">大一</option>
+          <option value="sophomore_plus" selected>大二及以上</option>
+        </select>
+      </div>
+      <div class="field"><label>是否已有说明文档</label>
+        <select id="fHasDoc"><option value="unknown">不确定</option><option value="yes">有</option><option value="no">没有</option></select>
+      </div>
+      <div class="field"><label>是否已有演示视频</label>
+        <select id="fHasVideo"><option value="unknown">不确定</option><option value="yes">有</option><option value="no">没有</option></select>
+      </div>
+      <div class="field"><label>是否需要指导老师签字</label>
+        <select id="fHasTeacher"><option value="unknown">不确定</option><option value="yes">需要</option><option value="no">不需要</option></select>
+      </div>
       <div class="field"><label>已备材料</label>
         ${materials.map((m) => `<label class="chk"><input type="checkbox" value="${escapeHtml(m.id)}"> <span>${escapeHtml(m.name)}</span></label>`).join('')}
       </div>
@@ -48,7 +64,16 @@ export function renderCheckForm(mount) {
 
   mount.querySelector('#checkBtn').onclick = async () => {
     const checked = Array.from(mount.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value)
-    const profile = { people_count: 3, grade: 'sophomore_plus' }
+    const profile = {
+      people_count: Number(mount.querySelector('#fPeopleCount').value) || 3,
+      grade: mount.querySelector('#fGrade').value,
+    }
+    const hasDoc = mount.querySelector('#fHasDoc').value
+    const hasVideo = mount.querySelector('#fHasVideo').value
+    const hasTeacherConfirm = mount.querySelector('#fHasTeacher').value
+    if (hasDoc !== 'unknown') profile.has_doc = hasDoc === 'yes'
+    if (hasVideo !== 'unknown') profile.has_video = hasVideo === 'yes'
+    if (hasTeacherConfirm !== 'unknown') profile.has_teacher_confirm = hasTeacherConfirm === 'yes'
 
     const box = mount.querySelector('#checkResult')
     const btn = mount.querySelector('#checkBtn')

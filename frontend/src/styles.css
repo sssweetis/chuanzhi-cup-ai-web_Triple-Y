@@ -165,11 +165,6 @@ button:disabled {
   margin-left: auto;
 }
 
-.prototype-link {
-  color: var(--accent-deep);
-  text-decoration: none;
-}
-
 .help-icon {
   display: inline-flex;
   width: 17px;
@@ -1556,6 +1551,55 @@ textarea#taskInput {
 .src-detail summary {
   color: var(--accent-deep);
   cursor: pointer;
+}
+
+.trace-detail {
+  margin-top: 12px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.trace-detail summary {
+  color: var(--accent-deep);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trace-detail-main {
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #faf9ff;
+}
+
+.trace-groups {
+  margin-top: 8px;
+}
+
+.trace-item {
+  margin-top: 6px;
+  padding-left: 9px;
+  border-left: 2px solid var(--line);
+}
+
+.trace-item summary {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.trace-item pre {
+  max-height: 260px;
+  margin: 6px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #f3f1f8;
+  color: var(--ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .src-quote {

@@ -21,7 +21,6 @@ function boot() {
           <div class="slogan">粘贴一段通知，剩下的我帮你记着</div>
         </div>
         <div class="topbar-actions">
-          <a class="btn btn-ghost btn-sm prototype-link" href="/prototypes/index.html" target="_blank" rel="noopener">新版样板</a>
           <button class="btn btn-ghost btn-sm" id="helpBtn"><span class="help-icon" aria-hidden="true">?</span>使用说明</button>
         </div>
       </header>

@@ -1,15 +1,21 @@
-﻿# -*- coding: utf-8 -*-
-"""生成提交用 ZIP，排除密钥、依赖、缓存和大测试文件。"""
+# -*- coding: utf-8 -*-
+"""生成提交用 ZIP，排除密钥、依赖、缓存、旧包和大测试文件。"""
 import os
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT.parent / ("Triple_Y_submission_" + datetime.now().strftime("%Y%m%d_%H%M") + ".zip")
-SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", "data", "dist", ".pytest_cache",
-             "submission", ".build_tmp", ".a_tmp"}
-SKIP_FILES = {".env", ".env.local", ".env.development"}
+OUTPUT_DIR = Path(os.getenv("TRIPLEY_OUTPUT_DIR", str(ROOT.parent)))
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT = OUTPUT_DIR / ("Triple_Y_submission_" + datetime.now().strftime("%Y%m%d_%H%M") + ".zip")
+SKIP_DIRS = {
+    ".git", ".venv", "node_modules", "__pycache__", "data", "dist",
+    ".pytest_cache", "submission", ".build_tmp", ".a_tmp", "release",
+}
+SKIP_FILES = {
+    ".env", ".env.local", ".env.development", "scene.mp4", "scene_clean.mp4",
+}
 LARGE_SKIP = {str(ROOT / "src" / "测试通知.pdf")}
 
 with zipfile.ZipFile(OUT, "w", compression=zipfile.ZIP_DEFLATED) as zf:

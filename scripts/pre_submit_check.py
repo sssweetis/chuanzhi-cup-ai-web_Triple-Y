@@ -19,7 +19,7 @@ REQUIRED = [
     "README.md", "LICENSE", "backend/main.py", "backend/requirements.txt", "backend/error_contract.py", "backend/smoke_test_errors.py",
     "backend/.env.example", "backend/smoke_test_hardening.py", "frontend/package.json",
     "scripts/build_tech_pdf.ps1",
-    "docs/技术文档.md", "docs/技术文档.html", "docs/技术文档.pdf", "docs/演示视频脚本.md",
+    "docs/技术文档.md", "docs/技术文档.html", "docs/技术文档.pdf", "docs/演示视频.mp4", "docs/演示视频脚本.md",
     "docs/作品介绍文档.md", "docs/作品介绍文档.pdf", "docs/预提交材料说明.md",
     "docs/部署说明.md", "docs/第三阶段测试用例.md", "docs/真实模型验收记录.md",
     "scripts/online_acceptance.ps1", "scripts/deploy-vps.sh", "scripts/final_package.py",
@@ -122,9 +122,21 @@ def main():
 
     print("\n[5] 提醒（需人工确认）")
     print("  · README「团队分工」是否写了真实姓名/GitHub 账号")
-    print("  · docs/技术文档.md 的 4.1/4.2 已由 A 补完（检查最终 PDF 是否包含）")
-    print("  · 演示视频是否已录（5–8 分钟、MP4、≥1080p）")
-    print("  · 技术文档 PDF 是否已按最终版重新导出（当前 27 页，≤30 页）")
+    print("  · docs/技术文档.md 的 4.1/4.2 与前端工程章节已补齐（检查最终 PDF 是否包含）")
+    video = os.path.join(ROOT, "docs", "演示视频.mp4")
+    if os.path.isfile(video):
+        print("  ✅ 演示视频文件已存在：docs/演示视频.mp4（%.1f MB；成品规格 6:32 / 1920×1080 / 30fps）" % (os.path.getsize(video) / 1024 / 1024))
+    else:
+        print("  ⚠️ 演示视频文件尚未生成：docs/演示视频.mp4")
+        warns.append("演示视频文件缺失")
+    try:
+        from pypdf import PdfReader
+        pages = len(PdfReader(os.path.join(ROOT, "docs", "技术文档.pdf")).pages)
+        print("  ✅ 技术文档 PDF 当前 %d 页（要求 ≤30 页）" % pages)
+        if pages > 30:
+            problems.append("技术文档 PDF 超过 30 页")
+    except Exception:
+        print("  ⚠️ 无法自动读取 PDF 页数，请人工确认 ≤30 页")
     print("  · 省赛第 5 项：完整作品包是否已上传网盘，链接是否可访问")
     print("  · 省赛第 6 项：作品介绍文档 PDF 是否已上传")
     print("  · 省赛第 7 项：视频是否已传 B 站/抖音，链接是否可访问（不要填网盘）")

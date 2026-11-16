@@ -37,6 +37,13 @@ describe('error scenarios', () => {
     expect(message).not.toMatch(/127\.0\.0\.1|C 的服务|服务内部异常|API Key/i)
   })
 
+  it('uses a safe backend message as fallback copy', () => {
+    const message = userErrorMessage(
+      new AppError({ code: 'server_error', backendMessage: '当前暂时无法解析，请稍后重试' }),
+    )
+    expect(message).toBe('当前暂时无法解析，请稍后重试')
+  })
+
   it('rejects an empty analysis result', () => {
     expect(() => assertAnalysisResult(null)).toThrow(AppError)
     expect(() => assertAnalysisResult({ title: '任务' })).not.toThrow()
@@ -51,5 +58,16 @@ describe('error scenarios', () => {
     expect(container.querySelector('[aria-live="assertive"]')).not.toBeNull()
     expect(container.textContent).toContain('TY-TEST-001')
     expect(container.querySelector('[data-error-action="retry"]')).not.toBeNull()
+  })
+
+  it('shows a safe backend error message but hides technical details', () => {
+    const safe = document.createElement('div')
+    renderErrorState(safe, new AppError({ code: 'server_error', backendMessage: '材料解析暂时不可用，请稍后重试' }))
+    expect(safe.textContent).toContain('服务说明')
+    expect(safe.textContent).toContain('材料解析暂时不可用')
+
+    const unsafe = document.createElement('div')
+    renderErrorState(unsafe, new AppError({ code: 'server_error', backendMessage: 'Traceback at 127.0.0.1' }))
+    expect(unsafe.textContent).not.toContain('127.0.0.1')
   })
 })

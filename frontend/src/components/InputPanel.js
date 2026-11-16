@@ -1,5 +1,5 @@
 // @ts-nocheck -- 渐进迁移：核心状态与请求层已启用类型检查。
-import { state, setState } from '../state.js'
+import { state, setState, toDateKey } from '../state.js'
 import {
   analyzeNotification,
   prepareList,
@@ -31,6 +31,30 @@ let activeAnalysis = null
 let cancelIntent = ''
 let matterRenderer = null
 let matterRendererRequest = null
+let moreMenuGlobalReady = false
+
+function closeOpenMoreMenu({ restoreFocus = false } = {}) {
+  const menu = document.querySelector('#moreMenu')
+  const trigger = document.querySelector('#moreBtn')
+  if (!menu || !trigger) return
+  menu.hidden = true
+  menu.classList.remove('is-open')
+  trigger.setAttribute('aria-expanded', 'false')
+  if (restoreFocus) trigger.focus()
+}
+
+function initMoreMenuGlobal() {
+  if (moreMenuGlobalReady) return
+  moreMenuGlobalReady = true
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return
+    if (event.target.closest('.more-wrap')) return
+    closeOpenMoreMenu()
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeOpenMoreMenu({ restoreFocus: true })
+  })
+}
 
 async function loadMatterRenderer() {
   if (matterRenderer) return matterRenderer
@@ -48,6 +72,7 @@ function analysisReference(error) {
 }
 
 export function renderInputPanel(mount) {
+  initMoreMenuGlobal()
   mount.innerHTML = `
     <div class="card in input-card">
       <div class="section-head">
@@ -57,17 +82,29 @@ export function renderInputPanel(mount) {
       <textarea id="taskInput" rows="4" maxlength="10000" aria-label="通知原文" placeholder="例如：请于 10 月 25 日 18:00 前提交比赛报名表和成绩单，逾期不候。"></textarea>
       <div class="in-bar">
         <div class="in-bar-left">
-          <button class="tool" id="micBtn" type="button">语音</button>
-          <button class="tool" id="imgBtn" type="button">📷 截图/图片</button>
-          <input type="file" id="imgInput" accept="image/jpeg,image/png,image/webp" hidden>
-          <button class="tool" id="pdfBtn" type="button">📄 PDF</button>
-          <input type="file" id="pdfInput" accept=".pdf" hidden>
-          <button class="tool" id="attachBtn" type="button">附件</button>
-          <input type="file" id="fileInput" accept=".doc,.docx,.pdf" multiple hidden>
-          <span class="date-pick">截止 <input type="date" id="taskDate"></span>
-          <button class="tool" id="demoToggle" type="button" title="离线示例数据">示例</button>
-          <button class="tool tool-accent" id="quickDemo" type="button">⚡ 一键体验</button>
+          <div class="primary-actions">
+            <button class="tool" id="imgBtn" type="button">📷 截图/图片</button>
+            <button class="tool" id="pdfBtn" type="button">📄 PDF</button>
+          </div>
           <button class="tool" id="compareBtn" type="button">🔄 补充通知对比</button>
+          <div class="more-wrap">
+            <button class="tool more-trigger" id="moreBtn" type="button" aria-label="更多输入方式" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">
+              ＋ 更多 <span aria-hidden="true">▾</span>
+            </button>
+            <div class="more-menu" id="moreMenu" role="menu" aria-label="更多输入与示例" hidden>
+              <button class="more-item" id="micBtn" type="button" role="menuitem">语音输入<span>把通知说出来</span></button>
+              <button class="more-item" id="attachBtn" type="button" role="menuitem">上传附件<span>Word / PDF</span></button>
+              <button class="more-item" id="demoToggle" type="button" role="menuitem" aria-expanded="false">示例数据<span>离线预览</span></button>
+              <div class="demo-row" id="demoRow" hidden>
+                ${SAMPLES.map((s, i) => `<button class="tool demo-btn" data-i="${i}" type="button" role="menuitem">${s.label}</button>`).join('')}
+              </div>
+              <button class="more-item" id="quickDemo" type="button" role="menuitem">一键体验<span>直接打开示例数据</span></button>
+              <label class="more-date">截止日期<input type="date" id="taskDate"></label>
+            </div>
+          </div>
+          <input type="file" id="imgInput" accept="image/jpeg,image/png,image/webp" hidden>
+          <input type="file" id="pdfInput" accept=".pdf" hidden>
+          <input type="file" id="fileInput" accept=".doc,.docx,.pdf" multiple hidden>
         </div>
         <div class="in-bar-right">
           <span class="char-count" id="charCount">0 / 10000</span>
@@ -82,9 +119,6 @@ export function renderInputPanel(mount) {
       </div>
       <div class="chips" id="chipBox"></div>
       <div class="attach-note">支持文字型 PDF（≤10MB、≤30 页）；扫描版请改用截图。</div>
-      <div class="demo-row" id="demoRow" hidden>
-        ${SAMPLES.map((s, i) => `<button class="tool demo-btn" data-i="${i}">${s.label}</button>`).join('')}
-      </div>
       <div class="result-zone" id="resultZone"></div>
     </div>
     <div class="card library-card">
@@ -277,7 +311,11 @@ export function renderInputPanel(mount) {
       const imgNotice = state.resultFromImage
         ? '<div class="notice notice-warn">当前结果由图片识别生成，建议核对原文，如有错漏请及时修改。</div>'
         : ''
+      const demoNotice = state.resultIsDemo
+        ? '<div class="demo-data-banner" role="status"><b>示例数据</b><span>当前内容仅用于体验，不是从你的通知中解析出的真实任务。</span></div>'
+        : ''
       zone.innerHTML =
+        demoNotice +
         imgNotice +
         matterRenderer(state.analyzeResult) +
         `
@@ -286,19 +324,25 @@ export function renderInputPanel(mount) {
         </div>`
       mount.querySelector('#addTaskBtn').onclick = () => {
         const matter = state.analyzeResult
-        const due = matter?.deadline?.due_at
-          ? matter.deadline.due_at.slice(0, 10)
-          : new Date().toISOString().slice(0, 10)
+        const selectedDate = toDateKey(mount.querySelector('#taskDate')?.value)
+        const due = selectedDate || toDateKey(matter?.deadline?.due_at)
         const title = matter?.title || '新任务'
         const srcText = mount.querySelector('#taskInput').value.trim()
         if (!state.tasks.some((task) => task.title === title)) {
-          state.tasks.push({ id: Date.now(), title, date: due, done: false, sourceText: srcText })
+          state.tasks.push({
+            id: Date.now(),
+            title,
+            date: due,
+            done: false,
+            sourceText: srcText,
+            isDemo: state.resultIsDemo,
+          })
         }
         const todos = matter?.todo_list || matter?.step_list || []
         todos.forEach((item) => {
           const name = item.action || item.title || item.name
           if (!name) return
-          const taskDue = item.due_at ? String(item.due_at).slice(0, 10) : due
+          const taskDue = toDateKey(item.due_at) || due
           if (!state.tasks.some((task) => task.title === name)) {
             state.tasks.push({
               id: Date.now() + Math.random(),
@@ -306,6 +350,7 @@ export function renderInputPanel(mount) {
               date: taskDue,
               done: item.status === 'completed',
               generated: true,
+              isDemo: state.resultIsDemo,
             })
           }
         })
@@ -323,12 +368,12 @@ export function renderInputPanel(mount) {
   async function prepareGeneratedTasks(data, sourceText) {
     try {
       const prepared = await prepareList({ matter: data })
-      const due = data?.deadline?.due_at ? data.deadline.due_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+      const due = toDateKey(data?.deadline?.due_at)
       const generated = (prepared.todo_list || []).map((item, index) => ({
         id: 9000 + index,
         todo_id: item.todo_id,
         title: item.action,
-        date: due,
+        date: toDateKey(item.due_at) || due,
         done: item.status === 'completed',
         doneAt: item.status === 'completed' ? new Date().toISOString().slice(0, 10) : '',
         generated: true,
@@ -452,6 +497,7 @@ export function renderInputPanel(mount) {
         analysisNotice: '',
         analyzeResult: validated,
         resultFromImage: fromImage,
+        resultIsDemo: false,
       })
 
       if (dateCheck) {
@@ -460,12 +506,20 @@ export function renderInputPanel(mount) {
           const tip = document.createElement('div')
           tip.id = 'dateCheckTip'
           tip.className = 'notice notice-info'
-          tip.textContent =
-            '日期核对：' +
-            (dateCheck.message || dateCheck.suggestion || `建议完成时间：${dateCheck.recommended_date || ''}`)
+          const dateMessage =
+            dateCheck.message ||
+            dateCheck.suggestion ||
+            (dateCheck.suggested_finish_at
+              ? `建议完成时间：${dateCheck.suggested_finish_at}`
+              : dateCheck.recommended_date
+                ? `建议日期：${dateCheck.recommended_date}`
+                : '')
+          tip.textContent = dateMessage ? '日期核对：' + dateMessage : '日期核对已完成'
           activeZone.appendChild(tip)
         }
       }
+      const dateInput = mount.querySelector('#taskDate')
+      if (dateInput && !dateInput.value) dateInput.value = toDateKey(validated.deadline?.due_at)
       showConfirmation(validated)
       void prepareGeneratedTasks(validated, text)
     } catch (error) {
@@ -489,6 +543,57 @@ export function renderInputPanel(mount) {
   }
 
   paint()
+  const moreBtn = mount.querySelector('#moreBtn')
+  const moreMenu = mount.querySelector('#moreMenu')
+
+  function setMoreMenuOpen(open, focusFirst = false) {
+    moreMenu.hidden = !open
+    moreMenu.classList.toggle('is-open', open)
+    moreBtn.setAttribute('aria-expanded', String(open))
+    if (open && focusFirst) {
+      requestAnimationFrame(() => {
+        moreMenu.querySelector('.more-item:not([hidden]), input:not([hidden])')?.focus()
+      })
+    }
+  }
+
+  moreBtn.onclick = () => setMoreMenuOpen(moreMenu.hidden)
+  moreBtn.onkeydown = (event) => {
+    if (event.key !== 'ArrowDown') return
+    event.preventDefault()
+    setMoreMenuOpen(true, true)
+  }
+  moreMenu.onkeydown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeOpenMoreMenu({ restoreFocus: true })
+      return
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    const items = Array.from(moreMenu.querySelectorAll('button, input')).filter((item) => item.offsetParent !== null)
+    const index = items.indexOf(document.activeElement)
+    const direction = event.key === 'ArrowDown' ? 1 : -1
+    const next = items[(index + direction + items.length) % items.length]
+    event.preventDefault()
+    next?.focus()
+  }
+
+  function activateSample(index) {
+    const sample = SAMPLES[Number(index)]
+    if (!sample) return
+    if (state.analyzing || activeAnalysis) {
+      toast('当前解析还没结束，请先取消或等待完成。')
+      return
+    }
+    setState({
+      analyzing: false,
+      analyzeError: null,
+      analyzeResult: sample.data,
+      resultIsDemo: Boolean(sample.isDemo),
+    })
+    setMoreMenuOpen(false)
+  }
+
   mount.querySelector('#analyzeBtn').onclick = runAnalyze
   mount.querySelector('#imgBtn').onclick = () => mount.querySelector('#imgInput').click()
   mount.querySelector('#pdfBtn').onclick = () => mount.querySelector('#pdfInput').click()
@@ -639,16 +744,13 @@ export function renderInputPanel(mount) {
   mount.querySelector('#demoToggle').onclick = () => {
     const row = mount.querySelector('#demoRow')
     row.hidden = !row.hidden
+    mount.querySelector('#demoToggle').setAttribute('aria-expanded', String(!row.hidden))
   }
   mount.querySelector('#quickDemo').onclick = () => {
-    if (state.analyzing || activeAnalysis) {
-      toast('当前解析还没结束，请先取消或等待完成。')
-      return
-    }
     mount.querySelector('#taskInput').value =
       '请于10月25日18:00前提交奖学金报名表和成绩单，材料审核由王老师负责，审核通过后10月30日前缴费100元，11月1日打印准考证。'
     syncInput()
-    runAnalyze()
+    activateSample(0)
   }
   mount.querySelector('#compareBtn').onclick = () => openCompareDialog()
 
@@ -709,17 +811,19 @@ export function renderInputPanel(mount) {
           left: { filename: '原通知', text: oldN },
           right: { filename: '补充通知', text: newN },
         })
-        const d = res.diff || res
-        const changes = (d.changes || [])
+        const diff = res.diff || {}
+        const changes = (diff.changes || [])
           .map((c) => {
             const type = ['added', 'removed', 'changed'].includes(c.type) ? c.type : 'info'
             return `<div class="diff-change diff-${type}">${esc(c.text || c.note || '')}</div>`
           })
           .join('')
-        const affected = (d.affected_todos || []).map((t) => `<li>· ${esc(t)}</li>`).join('')
-        if (d.preview_todo_list) state.comparePreviewTodo = d.preview_todo_list
-        else if (d.affected_todos && d.affected_todos.length)
-          state.comparePreviewTodo = d.affected_todos.map((t) => ({ action: t, status: 'not_started' }))
+        const affectedTodos = diff.affected_todos || []
+        const affected = affectedTodos.map((t) => `<li>· ${esc(t)}</li>`).join('')
+        const previewTodos = diff.preview_todo_list || affectedTodos || []
+        state.comparePreviewTodo = previewTodos.length
+          ? previewTodos.map((item) => (typeof item === 'string' ? { action: item, status: 'not_started' } : item))
+          : undefined
         state.compareMatter = res.right?.matter || res.left?.matter || state.analyzeResult
         zone.innerHTML = `<div class="matter-card compare-result">
           <div class="mc-title-row"><h3>通知对比结果</h3><span class="status-chip status-info">已对比</span></div>
@@ -766,7 +870,7 @@ export function renderInputPanel(mount) {
     }
   }
   mount.querySelector('#taskInput').value = localStorage.getItem('zhiban-input') || ''
-  function syncInput() {
+  function syncInput(fromUser = false) {
     const ta = mount.querySelector('#taskInput')
     localStorage.setItem('zhiban-input', ta.value)
     mount.querySelector('#charCount').textContent = `${ta.value.length} / 10000`
@@ -777,23 +881,19 @@ export function renderInputPanel(mount) {
       paint()
     }
     // 输入框清空时，下方分析结果也一起清掉
-    if (!ta.value.trim() && state.analyzeResult) {
-      setState({ analyzeResult: null, analyzeError: null })
+    if (fromUser && !ta.value.trim() && state.analyzeResult) {
+      setState({ analyzeResult: null, analyzeError: null, resultIsDemo: false })
     }
   }
-  mount.querySelector('#taskInput').oninput = syncInput
+  mount.querySelector('#taskInput').oninput = () => syncInput(true)
   syncInput()
-  mount.querySelectorAll('.demo-btn').forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (state.analyzing || activeAnalysis) {
-          toast('当前解析还没结束，请先取消或等待完成。')
-          return
-        }
-        setState({ analyzing: false, analyzeError: null, analyzeResult: SAMPLES[Number(b.dataset.i)].data })
-      }),
-  )
-  mount.querySelector('#attachBtn').onclick = () => mount.querySelector('#fileInput').click()
+  mount.querySelectorAll('.demo-btn').forEach((button) => {
+    button.onclick = () => activateSample(button.dataset.i)
+  })
+  mount.querySelector('#attachBtn').onclick = () => {
+    closeOpenMoreMenu()
+    mount.querySelector('#fileInput').click()
+  }
   mount.querySelector('#fileInput').onchange = (e) => {
     const box = mount.querySelector('#chipBox')
     Array.from(e.target.files).forEach((f) => {
@@ -805,6 +905,7 @@ export function renderInputPanel(mount) {
   }
   // 语音输入（浏览器原生识别，不支持则提示）
   mount.querySelector('#micBtn').onclick = () => {
+    closeOpenMoreMenu()
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) {
       toast('当前浏览器不支持语音输入（推荐 Chrome）')

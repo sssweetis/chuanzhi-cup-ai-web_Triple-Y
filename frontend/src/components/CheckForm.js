@@ -1,43 +1,30 @@
-// 用户情况填写（C 对齐 10/20）：
-// POST /api/check body = { matter: state.analyzeResult, profile:{people_count,has_doc,has_video,has_teacher_confirm}, checked_material_ids }
-// 后端返回 checked / missing_required / missing_optional / need_confirm / profile_issues / summary → 前端映射成三类
+// 材料核对：界面仅保留材料勾选，隐藏字段使用已确认的本地默认 profile。
 // @ts-nocheck -- 渐进迁移：待材料核对接口类型补齐后移除。
-import { state, setState } from '../state.js'
+import { state } from '../state.js'
 import { checkProfile } from '../api2.js'
 import { escapeHtml, setButtonBusy } from '../util.js'
 import { userErrorMessage } from '../errors.js'
 
-const FALLBACK_MATERIALS = [
-  { id: 'm1', name: '作品演示视频（≤3 分钟）' },
-  { id: 'm2', name: '项目说明文档（PPT）' },
-  { id: 'm3', name: '成绩单复印件' },
-  { id: 'm4', name: '报名表' },
-]
-
 export function renderCheckForm(mount) {
-  // 材料列表优先从最近解析结果取，没有解析结果时用示例列表
-  const materials =
-    Array.isArray(state.analyzeResult && state.analyzeResult.materials) && state.analyzeResult.materials.length
-      ? state.analyzeResult.materials.map((m) => ({ id: m.material_id, name: m.material_name }))
-      : FALLBACK_MATERIALS
+  const materials = Array.isArray(state.analyzeResult?.materials)
+    ? state.analyzeResult.materials
+        .filter((material) => material?.material_id && material?.material_name)
+        .map((material) => ({ id: material.material_id, name: material.material_name }))
+    : []
+
+  if (!materials.length) {
+    mount.innerHTML = `
+      <div class="card check-card">
+        <div class="list-title">材料核对</div>
+        <div class="empty check-empty">当前通知还没有提取到材料，完成解析后会显示在这里。</div>
+      </div>`
+    return
+  }
 
   mount.innerHTML = `
-    <div class="card">
-      <div class="list-title">我们队的情况</div>
-      <div class="sub">勾选已具备的材料，系统分成"已准备 / 缺少 / 需要确认"</div>
-      <div class="field"><label>团队人数</label><input type="number" id="fPeopleCount" value="3" min="1" max="10"></div>
-      <div class="field"><label>年级</label>
-        <select id="fGrade"><option value="freshman">大一</option><option value="sophomore_plus">大二及以上</option></select>
-      </div>
-      <div class="field"><label>是否已有说明文档</label>
-        <select id="fHasDoc"><option value="unknown">不确定</option><option value="yes">有</option><option value="no">没有</option></select>
-      </div>
-      <div class="field"><label>是否已有演示视频</label>
-        <select id="fHasVideo"><option value="unknown">不确定</option><option value="yes">有</option><option value="no">没有</option></select>
-      </div>
-      <div class="field"><label>是否需要指导老师签字</label>
-        <select id="fHasTeacher"><option value="unknown">不确定</option><option value="yes">需要</option><option value="no">不需要</option></select>
-      </div>
+    <div class="card check-card">
+      <div class="list-title">材料核对</div>
+      <div class="sub">勾选已经准备好的材料，系统会整理成"已准备 / 缺少 / 需要确认"</div>
       <div class="field"><label>已备材料</label>
         ${materials.map((m) => `<label class="chk"><input type="checkbox" value="${escapeHtml(m.id)}"> <span>${escapeHtml(m.name)}</span></label>`).join('')}
       </div>
@@ -61,17 +48,7 @@ export function renderCheckForm(mount) {
 
   mount.querySelector('#checkBtn').onclick = async () => {
     const checked = Array.from(mount.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value)
-    // "不确定"的 key 不传，避免被当成 false
-    const profile = {
-      people_count: Number(mount.querySelector('#fPeopleCount').value),
-      grade: mount.querySelector('#fGrade').value,
-    }
-    const doc = mount.querySelector('#fHasDoc').value
-    const video = mount.querySelector('#fHasVideo').value
-    const teacher = mount.querySelector('#fHasTeacher').value
-    if (doc !== 'unknown') profile.has_doc = doc === 'yes'
-    if (video !== 'unknown') profile.has_video = video === 'yes'
-    if (teacher !== 'unknown') profile.has_teacher_confirm = teacher === 'yes'
+    const profile = { people_count: 3, grade: 'sophomore_plus' }
 
     const box = mount.querySelector('#checkResult')
     const btn = mount.querySelector('#checkBtn')
@@ -81,10 +58,14 @@ export function renderCheckForm(mount) {
     try {
       const body = { profile, checked_material_ids: checked }
       if (state.analyzeResult) body.matter = state.analyzeResult
+      else {
+        const text = localStorage.getItem('zhiban-input') || ''
+        if (text) body.text = text
+      }
       const res = await checkProfile(body)
-      // C 返回 checked / missing_required / missing_optional / need_confirm / profile_issues / summary
+      const ready = Array.isArray(res.ready) && res.ready.length ? res.ready : res.checked || []
       const buckets = {
-        ready: res.checked || [],
+        ready,
         missing: [...(res.missing_required || []), ...(res.missing_optional || [])],
         needConfirm: [...(res.need_confirm || []), ...(res.profile_issues || [])],
       }
@@ -95,9 +76,6 @@ export function renderCheckForm(mount) {
         missing = [],
         needConfirm = []
       materials.forEach((m) => (checked.includes(m.id) ? ready : missing).push(m.name))
-      if (doc === 'unknown') needConfirm.push('说明文档是否必须？需向主办方确认')
-      if (video === 'unknown') needConfirm.push('演示视频是否必须？需向主办方确认')
-      if (teacher === 'unknown') needConfirm.push('指导老师签字要求？需向主办方确认')
       box.innerHTML =
         renderBuckets({ ready, missing, needConfirm }) +
         `<div class="error-box compact">核对服务暂时不可用，以上为本地分类。${escapeHtml(userErrorMessage(err, '请稍后重试。'))}</div>`

@@ -12,6 +12,10 @@ npm run dev
 
 开发时 `/api` 由 Vite 同源代理到本机后端，前端不读取 API 环境变量。
 
+- 前后端同机：Vite proxy target 为 `http://127.0.0.1:8000`
+- 前后端不在同机：Vite proxy target 可改为 `http://10.102.149.251:8000`
+- 生产部署：`VITE_API_BASE_URL=/`，由 Nginx 将 `/api` 代理到 `backend:8000`
+
 ## 功能
 - 文字通知 / 截图 / PDF → AI 解析成结构化结果
 - 任务清单：改名、完成/撤销、子任务、搜索、CSV 导出

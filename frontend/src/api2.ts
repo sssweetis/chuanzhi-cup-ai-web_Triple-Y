@@ -50,11 +50,19 @@ function payloadCode(status: number, payload: ApiErrorPayload): AppErrorCode {
 function responseError(status: number, payload: ApiErrorPayload, path: string, cause?: unknown): AppError {
   const detail = payload.error
   const detailRequestId = detail && typeof detail === 'object' ? detail.request_id || '' : ''
+  const backendMessage = typeof detail === 'string' ? detail : detail?.message || ''
   return new AppError({
     code: payloadCode(status, payload),
     status,
     requestId: detailRequestId || payload.request_id,
-    cause: cause || { path, status, error: payload.error, errorCode: payload.error_code },
+    backendMessage,
+    cause: {
+      path,
+      status,
+      backendMessage,
+      errorCode: payload.error_code || (detail && typeof detail === 'object' ? detail.code : ''),
+      original: cause || payload,
+    },
   })
 }
 
@@ -225,22 +233,11 @@ export function checkDate<
   T = {
     message?: string
     suggestion?: string
+    suggested_finish_at?: string
     recommended_date?: string
   },
 >(payload: unknown, options?: RequestOptions): Promise<T> {
   return requestJson('/api/tools/check-date', payload, options)
-}
-
-export async function exportTasks(): Promise<void> {
-  const response = await fetch(`${BASE_URL}/api/export`, { headers: { 'X-Session-Id': SESSION_ID } })
-  if (!response.ok) throw new AppError({ code: 'server_error', status: response.status })
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'tasks.csv'
-  anchor.click()
-  URL.revokeObjectURL(url)
 }
 
 export const apiBaseUrl = BASE_URL

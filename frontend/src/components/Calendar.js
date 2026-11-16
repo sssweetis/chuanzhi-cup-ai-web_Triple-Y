@@ -1,4 +1,4 @@
-import { state, setState, daysLeft } from '../state.js'
+import { state, setState, daysLeft, toDateKey } from '../state.js'
 import { escapeHtml } from '../util.js'
 
 let view = null
@@ -10,7 +10,7 @@ function pad(n) {
 }
 
 function dateParts(dateStr) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''))
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toDateKey(dateStr))
   if (!match) return null
   const year = Number(match[1])
   const month = Number(match[2]) - 1
@@ -39,19 +39,22 @@ export function renderCalendar(mount) {
   const currentTaskMap = new Map()
 
   state.tasks.forEach((task, index) => {
-    if (dateParts(task.date)) currentTaskMap.set(taskKey(task, index), task.date)
+    const dateKey = toDateKey(task.date)
+    if (dateParts(dateKey)) currentTaskMap.set(taskKey(task, index), dateKey)
   })
 
   const activeDates = state.tasks
     .filter((task) => !task.done && dateParts(task.date))
-    .map((task) => task.date)
+    .map((task) => toDateKey(task.date))
+    .filter(Boolean)
     .sort()
 
   let newlyAddedDate = ''
   state.tasks.forEach((task, index) => {
     const key = taskKey(task, index)
-    if (!task.done && dateParts(task.date) && (!previousTasks.has(key) || previousTasks.get(key) !== task.date)) {
-      newlyAddedDate = task.date
+    const dateKey = toDateKey(task.date)
+    if (!task.done && dateParts(dateKey) && (!previousTasks.has(key) || previousTasks.get(key) !== dateKey)) {
+      newlyAddedDate = dateKey
     }
   })
 
@@ -134,6 +137,12 @@ export function renderCalendar(mount) {
       const row = document.createElement('li')
       if (item.done) row.classList.add('is-done')
       row.textContent = item.title
+      if (item.isDemo) {
+        const badge = document.createElement('span')
+        badge.className = 'cal-tip-demo'
+        badge.textContent = '示例数据'
+        row.append(badge)
+      }
       list.append(row)
     })
     tooltip.replaceChildren(head, summary, list)
@@ -167,11 +176,12 @@ export function renderCalendar(mount) {
     const byDate = {}
 
     state.tasks.forEach((task) => {
-      if (!task.title || !dateParts(task.date)) return
-      if (!byDate[task.date]) byDate[task.date] = []
-      byDate[task.date].push({ title: task.title, done: Boolean(task.done) })
+      const taskDate = toDateKey(task.date)
+      if (!task.title || !dateParts(taskDate)) return
+      if (!byDate[taskDate]) byDate[taskDate] = []
+      byDate[taskDate].push({ title: task.title, done: Boolean(task.done), isDemo: Boolean(task.isDemo) })
 
-      const taskYear = dateParts(task.date).year
+      const taskYear = dateParts(taskDate).year
       if (Array.isArray(task.steps)) {
         task.steps.forEach((step) => {
           const match = String(step.title || '').match(/(\d{1,2})月(\d{1,2})日/)
@@ -181,7 +191,7 @@ export function renderCalendar(mount) {
           const stepDate = `${taskYear}-${pad(stepMonth)}-${pad(stepDay)}`
           if (!dateParts(stepDate)) return
           if (!byDate[stepDate]) byDate[stepDate] = []
-          byDate[stepDate].push({ title: step.title, done: Boolean(step.done) })
+          byDate[stepDate].push({ title: step.title, done: Boolean(step.done), isDemo: Boolean(task.isDemo) })
         })
       }
     })

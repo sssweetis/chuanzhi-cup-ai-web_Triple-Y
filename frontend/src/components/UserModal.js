@@ -21,7 +21,6 @@ export function openUserModal() {
           </div>
         </div>
         <div class="field"><label>登录账号</label><input id="fAccount"></div>
-        <div class="field"><label>登录密码（演示版本地保存）</label><input id="fPassword" type="password"></div>
         <div class="field"><label>昵称</label><input id="fNick"></div>
         <div class="modal-foot">
           <button class="btn btn-ghost" id="cancelModal" type="button">取消</button>
@@ -32,7 +31,6 @@ export function openUserModal() {
   }
   openModal(mask, { initialFocus: '#fAccount' })
   mask.querySelector('#fAccount').value = state.profile.account
-  mask.querySelector('#fPassword').value = state.profile.password
   mask.querySelector('#fNick').value = state.profile.nick
   const avBox = mask.querySelector('#fAvatar')
   const pendingAvatar = { value: state.profile.avatarUrl || '' }
@@ -63,7 +61,6 @@ export function openUserModal() {
       profile: {
         ...state.profile,
         account: mask.querySelector('#fAccount').value.trim() || 'triple',
-        password: mask.querySelector('#fPassword').value,
         nick: mask.querySelector('#fNick').value.trim() || 'Triple',
         avatarUrl: pendingAvatar.value,
       },

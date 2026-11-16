@@ -31,6 +31,7 @@ export interface AppErrorInit {
   code: InternalErrorCode
   status?: number
   requestId?: string
+  backendMessage?: string
   retryable?: boolean
   cause?: unknown
 }
@@ -162,20 +163,28 @@ export class AppError extends Error {
   code: InternalErrorCode
   status?: number
   requestId: string
+  backendMessage: string
   retryable: boolean
 
-  constructor({ code, status, requestId, retryable, cause }: AppErrorInit) {
+  constructor({ code, status, requestId, backendMessage, retryable, cause }: AppErrorInit) {
     super(code)
     this.name = 'AppError'
     this.code = code
     this.status = status
     this.requestId = requestId || referenceNumber()
+    this.backendMessage = backendMessage || ''
     this.retryable = retryable ?? !['auth', 'cancelled'].includes(code)
     this.cause = cause
   }
 }
 
 export type ApiError = AppError
+
+function safeBackendMessage(error: AppError): string {
+  const message = error.backendMessage.trim()
+  const unsafe = /traceback|exception|服务内部异常|127\.0\.0\.1|localhost|api.?key|secret|stack/i.test(message)
+  return message && !unsafe ? message : ''
+}
 
 export function normalizeError(error: unknown, fallbackCode: InternalErrorCode = 'server_error'): AppError {
   if (error instanceof AppError) return error
@@ -205,6 +214,8 @@ export function userErrorMessage(error: unknown, fallback = '操作没有完成�
   const normalized = normalizeError(error)
   if (normalized.code === 'cancelled') return '操作已取消。'
   const scenario = getErrorScenario(normalized)
+  const backendMessage = safeBackendMessage(normalized)
+  if (backendMessage) return backendMessage
   return scenario ? `${scenario.title}。${scenario.next}` : fallback
 }
 
@@ -217,6 +228,8 @@ export function assertAnalysisResult(data: AnalysisResult | null | undefined): A
 
 export function renderErrorState(container: HTMLElement, error: AppError, handlers: ErrorStateHandlers = {}): void {
   const scenario = getErrorScenario(error)
+  const backendMessage = safeBackendMessage(error)
+  const visibleBackendMessage = backendMessage && backendMessage !== scenario.message ? backendMessage : ''
   container.innerHTML = `
     <div class="error-state" role="alert" aria-live="assertive">
       <div class="error-state-head">
@@ -224,6 +237,7 @@ export function renderErrorState(container: HTMLElement, error: AppError, handle
         <div>
           <h3>${escapeHtml(scenario.title)}</h3>
           <p>${escapeHtml(scenario.message)}</p>
+          ${visibleBackendMessage ? `<p class="error-backend-detail"><b>服务说明：</b>${escapeHtml(visibleBackendMessage)}</p>` : ''}
         </div>
       </div>
       <div class="error-next"><b>下一步</b><span>${escapeHtml(scenario.next)}</span></div>

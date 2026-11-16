@@ -1,6 +1,5 @@
 export interface Profile {
   account: string
-  password: string
   nick: string
   color: string
   avatarUrl: string
@@ -24,6 +23,7 @@ export interface Task {
   generated?: boolean
   todo_id?: string
   source_ref?: unknown
+  isDemo?: boolean
   steps?: TaskStep[]
   [key: string]: unknown
 }
@@ -84,6 +84,7 @@ export interface AppState {
   analyzing: boolean
   analyzeError: import('./errors.ts').AppError | null
   analyzeResult: AnalysisResult | null
+  resultIsDemo: boolean
   resultFromImage?: boolean
   activeTab: ActiveTab
   focusDate?: string

@@ -3,9 +3,18 @@ import type { ActiveTab, AnalysisResult, AnalysisStageKey, AppState, Profile, Ta
 
 export const STATE_STORAGE_KEY = 'zhiban-state-v2'
 
+function safeProfile(profile: Partial<Profile> | undefined): Profile {
+  return {
+    account: profile?.account || 'triple',
+    nick: profile?.nick || 'Triple',
+    color: profile?.color || '#8b86e8',
+    avatarUrl: profile?.avatarUrl || '',
+  }
+}
+
 function loadInitial(): AppState {
   const base: AppState = {
-    profile: { account: 'triple', password: '', nick: 'Triple', color: '#8b86e8', avatarUrl: '' },
+    profile: safeProfile(undefined),
     tasks: [
       { id: 1, title: '示例任务 1：提交申报书', date: '2026-11-15', done: false },
       { id: 2, title: '示例任务 2：缴纳评审费', date: '2026-11-20', done: false },
@@ -14,6 +23,7 @@ function loadInitial(): AppState {
     analyzing: false,
     analyzeError: null,
     analyzeResult: null,
+    resultIsDemo: false,
     resultFromImage: false,
     activeTab: 'doing',
     analysisStage: 'preparing',
@@ -28,11 +38,26 @@ function loadInitial(): AppState {
         profile?: Profile
         tasks?: Task[]
         analyzeResult?: AnalysisResult
+        resultIsDemo?: boolean
         activeTab?: ActiveTab
       }
-      if (saved.profile) base.profile = { ...base.profile, ...saved.profile }
+      if (saved.profile) {
+        const legacyProfile = saved.profile as Profile & { password?: string }
+        base.profile = safeProfile(legacyProfile)
+        if ('password' in legacyProfile) {
+          const { password: _legacyPassword, ...sanitizedProfile } = legacyProfile
+          localStorage.setItem(
+            STATE_STORAGE_KEY,
+            JSON.stringify({
+              ...saved,
+              profile: sanitizedProfile,
+            }),
+          )
+        }
+      }
       if (Array.isArray(saved.tasks)) base.tasks = saved.tasks
       if (saved.analyzeResult) base.analyzeResult = saved.analyzeResult
+      if (typeof saved.resultIsDemo === 'boolean') base.resultIsDemo = saved.resultIsDemo
       if (saved.activeTab) base.activeTab = saved.activeTab
     }
   } catch {
@@ -54,9 +79,10 @@ export function setState(patch: Partial<AppState>, options: SetStateOptions = {}
     localStorage.setItem(
       STATE_STORAGE_KEY,
       JSON.stringify({
-        profile: state.profile,
+        profile: safeProfile(state.profile),
         tasks: state.tasks,
         analyzeResult: state.analyzeResult,
+        resultIsDemo: state.resultIsDemo,
         activeTab: state.activeTab,
       }),
     )
@@ -76,14 +102,32 @@ export function clearAnalysisError(): void {
   if (state.analyzeError) setState({ analyzeError: null, analysisNotice: '' }, { notify: false })
 }
 
-export function daysLeft(dateStr: string): number {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''))
-  if (!match) return Number.NaN
-  const year = Number(match[1])
-  const month = Number(match[2]) - 1
-  const day = Number(match[3])
-  const target = new Date(year, month, day)
-  if (target.getFullYear() !== year || target.getMonth() !== month || target.getDate() !== day) return Number.NaN
+export function parseDateValue(value: string | null | undefined): Date | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  if (dateOnly) {
+    const year = Number(dateOnly[1])
+    const month = Number(dateOnly[2]) - 1
+    const day = Number(dateOnly[3])
+    const target = new Date(year, month, day)
+    if (target.getFullYear() !== year || target.getMonth() !== month || target.getDate() !== day) return null
+    return target
+  }
+  const parsed = new Date(text)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+export function toDateKey(value: string | null | undefined): string {
+  const target = parseDateValue(value)
+  if (!target) return ''
+  const pad = (number: number) => String(number).padStart(2, '0')
+  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`
+}
+
+export function daysLeft(dateStr: string | null | undefined): number | null {
+  const target = parseDateValue(dateStr)
+  if (!target) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   target.setHours(0, 0, 0, 0)

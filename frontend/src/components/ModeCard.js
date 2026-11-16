@@ -2,6 +2,7 @@
 // 按 A 的 UI 建议稿版式渲染：emoji 分区标题 + 标题右侧优先级徽章
 // 仍遵守 5 条规则：只画 enabled_sections、步骤按索引、dependencies 连线、材料模板跳转、出处悬浮
 import { escapeHtml as esc } from '../util.js'
+import { parseDateValue } from '../state.js'
 
 const PRIORITY_LABEL = { low: '低优先级', medium: '中优先级', high: '高优先级', urgent: '紧急' }
 const PRIORITY_CLS = { low: 'p-low', medium: 'p-mid', high: 'p-high', urgent: 'p-urgent' }
@@ -30,13 +31,16 @@ const STEP_NUM = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨',
 
 function fmtTime(iso) {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseDateValue(iso)
+  if (!d) return ''
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 function countdown(iso) {
   if (!iso) return ''
-  const diff = new Date(iso) - new Date()
+  const target = parseDateValue(iso)
+  if (!target) return ''
+  const diff = target.getTime() - Date.now()
   if (diff <= 0) return '已到期'
   const days = Math.floor(diff / 86400000)
   const hours = Math.floor((diff % 86400000) / 3600000)
@@ -86,18 +90,27 @@ function _render(m) {
   }
 
   // ⏰ 截止
-  if (hasSection(m, 'schedule') && m.deadline && m.deadline.due_at) {
-    const countdownText = countdown(m.deadline.due_at)
+  if (hasSection(m, 'schedule')) {
+    const dueAt = m.deadline?.due_at
+    const parsedDue = parseDateValue(dueAt)
+    const countdownText = parsedDue ? countdown(dueAt) : ''
     const isOverdue = countdownText === '已到期'
+    const startText = fmtTime(m.deadline?.start_at)
+    const endText = fmtTime(m.deadline?.end_at)
     const range =
-      m.deadline.start_at && m.deadline.end_at
-        ? `<div class="mc-line">📅 整体：${fmtTime(m.deadline.start_at).slice(0, 10)} ~ ${fmtTime(m.deadline.end_at).slice(0, 10)}</div>`
+      startText && endText
+        ? `<div class="mc-line">📅 整体：${startText.slice(0, 10)} ~ ${endText.slice(0, 10)}</div>`
         : ''
-    html += `<div class="mc-block">
-      <div class="mc-line">⏰ 截止：${fmtTime(m.deadline.due_at)}</div>
-      <div class="mc-line mc-count ${isOverdue ? 'is-overdue' : ''}">${countdownText}</div>
-      ${range}
-    </div>`
+    html += parsedDue
+      ? `<div class="mc-block">
+          <div class="mc-line">⏰ 截止：${fmtTime(dueAt)}</div>
+          <div class="mc-line mc-count ${isOverdue ? 'is-overdue' : ''}">${countdownText}</div>
+          ${range}
+        </div>`
+      : `<div class="mc-block">
+          <div class="mc-line mc-date-unknown">未识别到截止时间</div>
+          ${range}
+        </div>`
     if (Array.isArray(m.reminders) && m.reminders.length) {
       const r = m.reminders[0]
       html += `<div class="mc-line">🔔 提醒：提前 ${Math.round((r.offset_minutes || 0) / 60)} 小时</div>`

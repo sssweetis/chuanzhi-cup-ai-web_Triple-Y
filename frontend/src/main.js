@@ -4,6 +4,7 @@ import { renderProfileCard } from './components/ProfileCard.js'
 import { renderCalendar } from './components/Calendar.js'
 import { renderInputPanel } from './components/InputPanel.js'
 import { renderTaskList } from './components/TaskList.js'
+import { renderCheckForm } from './components/CheckForm.js'
 import { closeModal, initModalA11y, openModal } from './util.js'
 
 function boot() {
@@ -28,6 +29,7 @@ function boot() {
         <div class="left">
           <div id="profileMount"></div>
           <div id="calMount"></div>
+          <div id="checkMount"></div>
         </div>
         <div class="right">
           <div id="inputMount"></div>
@@ -83,6 +85,7 @@ function boot() {
 function renderAll() {
   renderProfileCard(document.getElementById('profileMount'))
   renderCalendar(document.getElementById('calMount'))
+  renderCheckForm(document.getElementById('checkMount'))
   renderInputPanel(document.getElementById('inputMount'))
   renderTaskList(document.getElementById('listMount'))
 }
@@ -95,6 +98,7 @@ function renderChanged(keys = []) {
   }
   if (changed.has('profile')) renderProfileCard(document.getElementById('profileMount'))
   if (changed.has('tasks') || changed.has('focusDate')) renderCalendar(document.getElementById('calMount'))
+  if (changed.has('analyzeResult')) renderCheckForm(document.getElementById('checkMount'))
   if (['analyzeResult', 'resultFromImage'].some((key) => changed.has(key))) {
     renderInputPanel(document.getElementById('inputMount'))
   }

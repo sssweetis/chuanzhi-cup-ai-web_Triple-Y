@@ -69,6 +69,8 @@ describe('api cancellation and response mapping', () => {
       code: 'auth',
       status: 401,
       requestId: 'req-structured-401',
+      backendMessage: 'internal api key invalid at 127.0.0.1',
+      cause: { backendMessage: 'internal api key invalid at 127.0.0.1' },
     })
   })
 

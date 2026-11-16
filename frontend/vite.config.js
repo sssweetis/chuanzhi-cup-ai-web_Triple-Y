@@ -6,7 +6,8 @@ export default defineConfig({
     port: 5173,
     host: true,
     allowedHosts: true,
-    // cpolar 只暴露前端；/api 请求由 Vite 同源代理到本机后端
+    // 前端与后端同机：target 使用 http://127.0.0.1:8000
+    // 前端与后端不在同机：将下面 target 改为 http://10.102.149.251:8000
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

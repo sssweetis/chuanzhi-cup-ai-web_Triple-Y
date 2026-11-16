@@ -14,6 +14,7 @@ main.js
 ├─ ProfileCard
 │  └─ UserModal（按需加载）
 ├─ Calendar
+├─ CheckForm
 ├─ InputPanel
 │  ├─ AnalysisProgress
 │  ├─ ModeCard（按需加载）
@@ -65,9 +66,10 @@ preparing
 - `npm run ci`：类型、Lint、测试、构建串行执行
 - `npm run format:check`：Prettier
 
-当前 22 个测试覆盖：
+当前 29 个测试覆盖：
 
 - 12 个用户错误场景
+- 结构化错误 message 与敏感技术信息过滤
 - 取消请求
 - 90 秒慢请求提示
 - 429 映射
@@ -75,6 +77,7 @@ preparing
 - localStorage 恢复
 - 日期边界
 - 空结果
+- 带时区 ISO、空日期与非法日期
 - ErrorState aria-live
 
 ## 可访问性

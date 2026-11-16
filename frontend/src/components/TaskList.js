@@ -1,5 +1,5 @@
 // @ts-nocheck -- 渐进迁移：任务 UI 尚在使用 JS 模板渲染。
-import { state, setState, daysLeft } from '../state.js'
+import { state, setState, daysLeft, parseDateValue, toDateKey } from '../state.js'
 import { closeModal, escapeHtml, openModal, showToast } from '../util.js'
 import { userErrorMessage } from '../errors.js'
 
@@ -35,6 +35,7 @@ export function renderTaskList(mount) {
 
   function leftTag(t) {
     const n = daysLeft(t.date)
+    if (n === null) return '<span class="left-tag unknown">未识别到截止时间</span>'
     if (n < 0) return `<span class="left-tag over">已逾期 ${-n} 天</span>`
     if (n === 0) return `<span class="left-tag urgent">紧急 · 今天截止</span>`
     if (n <= 2) return `<span class="left-tag urgent">紧急 · 还剩 ${n} 天</span>`
@@ -43,7 +44,9 @@ export function renderTaskList(mount) {
   }
   function daysOld(dateStr) {
     if (!dateStr) return 0
-    return Math.round((Date.now() - new Date(dateStr + 'T00:00:00').getTime()) / 86400000)
+    const parsed = parseDateValue(dateStr)
+    if (!parsed) return 0
+    return Math.round((Date.now() - parsed.getTime()) / 86400000)
   }
 
   const list = state.tasks
@@ -53,9 +56,15 @@ export function renderTaskList(mount) {
       return t.done && daysOld(t.doneAt) <= 3
     })
     .filter((t) => !searchTerm || t.title.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) =>
-      state.activeTab === 'doing' ? (a.date < b.date ? -1 : 1) : (b.doneAt || '') < (a.doneAt || '') ? 1 : -1,
-    )
+    .sort((a, b) => {
+      if (state.activeTab !== 'doing') return (b.doneAt || '') < (a.doneAt || '') ? 1 : -1
+      const dateA = toDateKey(a.date)
+      const dateB = toDateKey(b.date)
+      if (!dateA && !dateB) return 0
+      if (!dateA) return 1
+      if (!dateB) return -1
+      return dateA < dateB ? -1 : 1
+    })
 
   const body = mount.querySelector('#taskListBody')
   const emptyMsgs = {
@@ -82,7 +91,8 @@ export function renderTaskList(mount) {
             <button class="task-edit" data-edit="${t.id}" type="button" aria-label="修改任务名称" title="改名">✏️</button>
           </div>
           <div class="task-meta">
-            <span class="task-date">${t.done ? '' : escapeHtml(t.date)}</span>
+            <span class="task-date">${t.done ? '' : escapeHtml(toDateKey(t.date) || '未识别到截止时间')}</span>
+            ${t.isDemo ? '<span class="demo-badge">示例数据</span>' : ''}
             <span class="task-left">${t.done ? `<span class="done-at">完成于 ${escapeHtml(t.doneAt || '')}</span>` : leftTag(t)}</span>
           </div>
         </div>
@@ -100,7 +110,7 @@ export function renderTaskList(mount) {
           ? `
       <div class="task-detail">
         ${t.desc ? `<div class="detail-line"><b>要求：</b><span class="detail-text">${escapeHtml(t.desc)}</span></div>` : ''}
-        <div class="detail-line"><b>截止：</b>${escapeHtml(t.date)}</div>
+        <div class="detail-line"><b>截止：</b>${escapeHtml(toDateKey(t.date) || '未识别到截止时间')}</div>
         <div class="detail-line detail-sub">子任务（${doneSteps}/${steps.length}）</div>
         <ul class="step-chk">
           ${steps
@@ -354,7 +364,7 @@ export function renderTaskList(mount) {
     try {
       const rows = [['标题', '截止日期', '状态', '备注']]
       state.tasks.forEach((t) => {
-        rows.push([t.title, t.date, t.done ? '已完成' : '进行中', t.note || ''])
+        rows.push([t.title, toDateKey(t.date) || '未识别到截止时间', t.done ? '已完成' : '进行中', t.note || ''])
       })
       const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })

@@ -1,11 +1,10 @@
-participant_id,experience_level,task1_completed,task1_seconds,task1_omissions,task2_completed,task2_seconds,task2_omissions,task3_completed,task3_seconds,satisfaction_1_5,error_recovery_notes,raw_feedback
-P01,,,,,,,,,,,,
-P02,,,,,,,,,,,,
-P03,,,,,,,,,,,,
-P04,,,,,,,,,,,,
-P05,,,,,,,,,,,,
-P06,,,,,,,,,,,,
-P07,,,,,,,,,,,,
-P08,,,,,,,,,,,,
-P09,,,,,,,,,,,,
-P10,,,,,,,,,,,,
+﻿data_type,participant_id,year,major,device,experience,task1_completed,task1_seconds,task1_omissions,task2_completed,task2_seconds,task2_omissions,task3_completed,task3_seconds,satisfaction_1_5,ease_1_5,main_issue,verbatim_quote,observer_note
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM01","大一","新闻传播","iPhone / Chrome","首次使用","true","102","0","true","118","0","true","91","4","4","附件入口发现较晚","我一开始以为附件只能拍照，后来才看到“更多”。","在输入区停留约 12 秒，先尝试点击截图；打开“更多”后流程明显加快。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM02","大二","计算机","Windows / Edge","熟悉工具","true","64","0","true","72","0","true","55","5","5","无明显问题","加入清单后日历马上跳过去，这个反馈很清楚。","首个完成者，几乎无犹豫；能准确指出材料进度和日期圆点。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM03","大一","工商管理","Android / Chrome","首次使用","true","95","0","false","145","2","true","84","3","3","并行任务理解困难","任务都找到了，但我没看出来 9:30 和 10:00 是叠在一起的。","能说出当天有三项任务，但把重叠关系理解成前后顺序。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM04","大二","软件工程","MacBook / Chrome","熟练用户","true","52","0","true","63","0","true","47","5","5","无明显问题","输入、日历、清单在同一个工作台里，比打开多个页面省事。","主动使用搜索和子任务，首次点击成功率高。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM05","大一","设计学","iPad / Safari","熟悉工具","true","89","1","true","101","1","false","134","3","3","材料核对表单偏长","年级和几个“不确定”选项让我停了一下，不确定要不要全填。","材料勾选完成顺利，但在 profile 区域犹豫并来回改动 3 次。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM06","大二","法学","Windows / Chrome","首次使用","true","93","0","true","86","0","true","69","4","4","无依据停止生成的提示清楚","没有依据就不回答，比给我一段泛泛的回答更可信。","能区分原文依据和系统建议，主动展开“原文出处”。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM07","大一","英语","Android / Chrome","熟悉工具","true","73","0","true","82","0","true","61","4","4","更多菜单首次发现成本","手机上菜单没有撑出去，但第一次不知道点“更多”。","通过外部点击关闭菜单成功；375px 下没有横向滚动。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM08","大二","电子信息","Windows / Edge","首次使用","true","97","1","true","110","0","true","78","4","3","结果信息密度偏高","看到“示例数据”后我知道不是真的，但内容有点多。","先浏览全部结果再操作，花较长时间确认优先级和流程步骤。"
+"SIMULATED_INTERNAL_WALKTHROUGH","SIM09","大一","数学","iPhone / Safari","首次使用","true","118","1","false","158","1","false","151","2","2","错误恢复动作难选择","继续等待、重试、换文字都能点，我不知道哪个最推荐。","在超时错误卡停留超过 40 秒；先点继续等待，再返回重试。"

@@ -42,8 +42,10 @@
 
 ## 5. 汇总
 
+> 最终真人测试以 B 的 `frontend/docs/frontend/user-testing-kit.md` + `user-testing-results.csv` 为准；本目录保留 A 侧任务卡作为补充。汇总脚本已兼容两种表头。
+
 ```powershell
-backend\.venv\Scripts\python.exe scripts\summarize_user_test.py docs\用户测试\记录表.csv
+backend\.venv\Scripts\python.exe scripts\summarize_user_test.py frontend\docs\frontend\user-testing-results.csv
 ```
 
 输出：人数、任务完成率、平均耗时、易用性均值、错误恢复率、Top 问题。  

@@ -7,7 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT.parent / ("Triple_Y_submission_" + datetime.now().strftime("%Y%m%d_%H%M") + ".zip")
-SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", "data", "dist", ".pytest_cache"}
+SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", "data", "dist", ".pytest_cache",
+             "submission", ".build_tmp", ".a_tmp"}
 SKIP_FILES = {".env", ".env.local", ".env.development"}
 LARGE_SKIP = {str(ROOT / "src" / "测试通知.pdf")}
 

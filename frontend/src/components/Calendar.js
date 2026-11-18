@@ -131,6 +131,10 @@ export function renderCalendar(mount) {
       'cal-tip-summary',
       remaining.length ? `${remaining.length} 项任务待处理` : '当天任务已全部完成',
     )
+    const parallel =
+      remaining.length >= 2
+        ? tooltipLine('div', 'cal-tip-parallel', `同日 ${remaining.length} 项并行，注意核对时间是否重叠`)
+        : null
     const list = document.createElement('ul')
     list.className = 'cal-tip-list'
     items.slice(0, 4).forEach((item) => {
@@ -145,7 +149,7 @@ export function renderCalendar(mount) {
       }
       list.append(row)
     })
-    tooltip.replaceChildren(head, summary, list)
+    tooltip.replaceChildren(head, summary, ...(parallel ? [parallel] : []), list)
     if (items.length > 4) tooltip.append(tooltipLine('div', 'cal-tip-more', `还有 ${items.length - 4} 项`))
     tooltip.hidden = false
 

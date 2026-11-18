@@ -25,6 +25,7 @@ export interface ErrorScenario {
   message: string
   next: string
   actions: ErrorActionKey[]
+  primary?: ErrorActionKey
 }
 
 export interface AppErrorInit {
@@ -59,6 +60,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '通知还在这里，只是现在暂时连不上解析服务。',
     next: '连接网络后再试一次，输入内容不会丢失。',
     actions: ['retry', 'edit'],
+    primary: 'retry',
   },
   network: {
     code: 'network',
@@ -66,13 +68,15 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '这次请求没有送达，已经替你保留输入内容。',
     next: '稍后重试；如果一直失败，可以先换成文字通知。',
     actions: ['retry', 'edit'],
+    primary: 'retry',
   },
   timeout: {
     code: 'timeout',
     title: '这次处理得有点久',
     message: '已经等待 90 秒，任务可能还在处理中。',
-    next: '可以继续等待，也可以重新发起或换一段文字。',
+    next: '先继续等待；若一直卡住，可重试重新发起；或换一段更完整的文字再解析。',
     actions: ['continue', 'retry', 'edit'],
+    primary: 'continue',
   },
   rate_limited: {
     code: 'rate_limited',
@@ -80,6 +84,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '短时间内的请求比较多，暂时需要缓一缓。',
     next: '等待几十秒后再试，已经填写的内容会保留。',
     actions: ['retry', 'edit'],
+    primary: 'retry',
   },
   file_too_large: {
     code: 'file_too_large',
@@ -87,6 +92,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '文件超过了当前可处理的大小。',
     next: '压缩图片或换一个更小的文件后重新上传。',
     actions: ['reupload', 'edit', 'help'],
+    primary: 'reupload',
   },
   unsupported_media: {
     code: 'unsupported_media',
@@ -94,6 +100,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '这个文件格式不在当前支持范围内。',
     next: '请改用 JPG、PNG、文字型 PDF，或直接粘贴通知文字。',
     actions: ['reupload', 'edit', 'help'],
+    primary: 'reupload',
   },
   scanned_pdf: {
     code: 'scanned_pdf',
@@ -101,6 +108,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '没有从文件中提取到可识别的文字。',
     next: '把相关页面截图后上传，或直接粘贴通知原文。',
     actions: ['reupload', 'edit', 'help'],
+    primary: 'reupload',
   },
   empty_result: {
     code: 'empty_result',
@@ -108,6 +116,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '通知里可能缺少截止时间、步骤或材料信息。',
     next: '补充上下文或换一段更完整的通知再试。',
     actions: ['edit', 'retry', 'help'],
+    primary: 'edit',
   },
   auth: {
     code: 'auth',
@@ -115,6 +124,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '后台的解析凭证暂时不可用，这不是你的操作问题。',
     next: '请联系维护人员；演示时可以先打开离线示例。',
     actions: ['help', 'edit'],
+    primary: 'help',
   },
   ocr_unavailable: {
     code: 'ocr_unavailable',
@@ -122,6 +132,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '当前无法读取图片里的文字。',
     next: '可以直接粘贴文字，或稍后更换一张更清晰的截图。',
     actions: ['reupload', 'edit', 'retry'],
+    primary: 'reupload',
   },
   server_error: {
     code: 'server_error',
@@ -129,6 +140,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '服务遇到了临时问题，输入内容已经保留。',
     next: '稍后重试；如果反复出现，可以复制错误编号反馈。',
     actions: ['retry', 'edit', 'help'],
+    primary: 'retry',
   },
   invalid_response: {
     code: 'invalid_response',
@@ -136,6 +148,7 @@ export const ERROR_SCENARIOS: Record<AppErrorCode, ErrorScenario> = {
     message: '服务返回了结果，但内容缺少必要字段。',
     next: '重试一次，或者换一段更完整的通知。',
     actions: ['retry', 'edit', 'help'],
+    primary: 'retry',
   },
 }
 
@@ -243,13 +256,14 @@ export function renderErrorState(container: HTMLElement, error: AppError, handle
       <div class="error-next"><b>下一步</b><span>${escapeHtml(scenario.next)}</span></div>
       <div class="error-actions">
         ${scenario.actions
-          .map(
-            (action, index) => `
-          <button class="btn ${index === 0 ? 'btn-primary' : 'btn-ghost'} btn-sm" type="button" data-error-action="${action}">
-            ${escapeHtml(ACTION_LABELS[action])}
-          </button>
-        `,
-          )
+          .map((action, index) => {
+            const isPrimary = scenario.primary ? action === scenario.primary : index === 0
+            const badge = action === scenario.primary ? '<span class="rec-badge">推荐</span>' : ''
+            return `
+          <button class="btn ${isPrimary ? 'btn-primary' : 'btn-ghost'} btn-sm" type="button" data-error-action="${action}">
+            ${escapeHtml(ACTION_LABELS[action])}${badge}
+          </button>`
+          })
           .join('')}
         <button class="btn btn-ghost btn-sm error-copy" type="button" data-error-action="copy">复制错误编号</button>
       </div>

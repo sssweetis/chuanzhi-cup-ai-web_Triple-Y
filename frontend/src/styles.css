@@ -2788,3 +2788,64 @@ body:has(.mask.show) {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* 同日并行任务标签 */
+.parallel-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #ece9fb;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  margin-left: 2px;
+}
+
+.cal-tip-parallel {
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* 首次进入“更多”的提示气泡 */
+.more-hint {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 31;
+  max-width: 220px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(39, 31, 72, 0.16);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.more-hint::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 18px;
+  border: 6px solid transparent;
+  border-top-color: #fff;
+}
+
+/* 错误恢复推荐动作标记 */
+.rec-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 9px;
+  font-weight: 800;
+}
+

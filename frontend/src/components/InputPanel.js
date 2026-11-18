@@ -73,6 +73,12 @@ function analysisReference(error) {
 
 export function renderInputPanel(mount) {
   initMoreMenuGlobal()
+  let showMoreHint = false
+  try {
+    showMoreHint = localStorage.getItem('triple-y-more-hint-seen') !== '1'
+  } catch {
+    showMoreHint = false
+  }
   mount.innerHTML = `
     <div class="card in input-card">
       <div class="section-head">
@@ -88,6 +94,7 @@ export function renderInputPanel(mount) {
           </div>
           <button class="tool" id="compareBtn" type="button">🔄 补充通知对比</button>
           <div class="more-wrap">
+            ${showMoreHint ? '<span class="more-hint" id="moreHint" role="note">语音、附件、示例都收在「更多」里</span>' : ''}
             <button class="tool more-trigger" id="moreBtn" type="button" aria-label="更多输入方式" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">
               ＋ 更多 <span aria-hidden="true">▾</span>
             </button>
@@ -546,10 +553,20 @@ export function renderInputPanel(mount) {
   const moreBtn = mount.querySelector('#moreBtn')
   const moreMenu = mount.querySelector('#moreMenu')
 
+  function dismissMoreHint() {
+    try {
+      localStorage.setItem('triple-y-more-hint-seen', '1')
+    } catch {
+      // 隐私模式下忽略持久化，本次会话内移除提示即可。
+    }
+    mount.querySelector('#moreHint')?.remove()
+  }
+
   function setMoreMenuOpen(open, focusFirst = false) {
     moreMenu.hidden = !open
     moreMenu.classList.toggle('is-open', open)
     moreBtn.setAttribute('aria-expanded', String(open))
+    if (open) dismissMoreHint()
     if (open && focusFirst) {
       requestAnimationFrame(() => {
         moreMenu.querySelector('.more-item:not([hidden]), input:not([hidden])')?.focus()

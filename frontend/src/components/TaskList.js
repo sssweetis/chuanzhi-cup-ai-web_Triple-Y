@@ -67,6 +67,12 @@ export function renderTaskList(mount) {
     })
 
   const body = mount.querySelector('#taskListBody')
+  const undoneByDate = {}
+  state.tasks.forEach((t) => {
+    if (t.done) return
+    const k = toDateKey(t.date)
+    if (k) undoneByDate[k] = (undoneByDate[k] || 0) + 1
+  })
   const emptyMsgs = {
     doing: '🎉 暂无进行中的任务，把上面的通知粘进来试试',
     done: '最近 3 天完成的任务会显示在这里',
@@ -92,6 +98,7 @@ export function renderTaskList(mount) {
           </div>
           <div class="task-meta">
             <span class="task-date">${t.done ? '' : escapeHtml(toDateKey(t.date) || '未识别到截止时间')}</span>
+            ${!t.done && undoneByDate[toDateKey(t.date)] > 1 ? `<span class="parallel-tag">同日 ${undoneByDate[toDateKey(t.date)]} 项并行</span>` : ''}
             ${t.isDemo ? '<span class="demo-badge">示例数据</span>' : ''}
             <span class="task-left">${t.done ? `<span class="done-at">完成于 ${escapeHtml(t.doneAt || '')}</span>` : leftTag(t)}</span>
           </div>

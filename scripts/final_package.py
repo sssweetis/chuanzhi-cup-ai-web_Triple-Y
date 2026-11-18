@@ -10,8 +10,9 @@ OUTPUT_DIR = Path(os.getenv("TRIPLEY_OUTPUT_DIR", str(ROOT.parent)))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT = OUTPUT_DIR / ("Triple_Y_submission_" + datetime.now().strftime("%Y%m%d_%H%M") + ".zip")
 SKIP_DIRS = {
-    ".git", ".venv", "node_modules", "__pycache__", "data", "dist",
+    ".git", ".venv", "venv", "node_modules", "__pycache__", "data", "dist",
     ".pytest_cache", "submission", ".build_tmp", ".a_tmp", "release",
+    "homepage-prototype", "wireframes",
 }
 SKIP_FILES = {
     ".env", ".env.local", ".env.development", "scene.mp4", "scene_clean.mp4",

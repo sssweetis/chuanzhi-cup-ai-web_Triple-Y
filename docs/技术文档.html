@@ -915,8 +915,8 @@ score &gt; 0.6 → complex
 </tr>
 </tbody>
 </table>
-<p>评测脚本：<code>scripts/eval_ai_v2.py</code>；明细：<code>docs/AI评测记录-v2.md</code>。<br />
-后续优化：向量检索 + rerank、片段去重、按标题/材料类型加权、引用片段可点击回原文。</p>
+<p>评测脚本：<code>scripts/eval_ai_v2.py</code>；明细：<code>docs/AI评测记录-v2.md</code>。</p>
+<p>后续优化：向量检索 + rerank、片段去重、按标题/材料类型加权、引用片段可点击回原文。</p>
 <h2>4.6 缺项判断与状态推演（A 规则 + C 接口）</h2>
 <h3>4.6.1 三类核对结果</h3>
 <p><code>/api/check</code> 的输入是 Matter + 用户勾选 + 用户自述，输出不是简单的“缺/不缺”，而是：</p>
@@ -1573,7 +1573,7 @@ score &gt; 0.6 → complex
 <li><strong>通知变化</strong>：已支持增量合并、受影响待办、用户确认和版本留档；连续多份补充通知、跨段落语义改期需要更多真实样例验证。</li>
 <li><strong>日期与校历</strong>：覆盖周末和常见固定节假日；农历节日、地方假期、调休以学校/单位通知为准，后续接可配置校历。</li>
 <li><strong>会话与权限</strong>：<code>X-Session-Id</code> 只做浏览器会话隔离，不是登录鉴权；账号体系、权限管理、多人协作属于后续规划。</li>
-<li><strong>提醒与部署</strong>：已生成 DDL 提醒任务，系统推送未接入；Docker / Render / VPS 配置已准备，公网地址和演示视频在提交前补齐。</li>
+<li><strong>提醒与部署</strong>：已生成 DDL 提醒任务，系统推送未接入；Docker / Render / VPS 配置已准备。在线演示本次不提供公网地址；演示视频已完成（<code>docs/演示视频.mp4</code>，6 分 32 秒、1920×1080）。</li>
 </ul>
 <p>后续方向：向量检索与重排、复杂条件分支、多文件合并、日历/飞书/系统通知、多人协作、移动端体验与更完整的真实样本评测。</p>
 <h3>8.3 社会价值与商业潜力</h3>

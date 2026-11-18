@@ -15,7 +15,8 @@ SKIP_DIRS = {
     "homepage-prototype", "wireframes",
 }
 SKIP_FILES = {
-    ".env", ".env.local", ".env.development", "scene.mp4", "scene_clean.mp4",
+    ".env", ".env.local", ".env.development", "config_local.py",
+    "scene.mp4", "scene_clean.mp4",
 }
 LARGE_SKIP = {str(ROOT / "src" / "测试通知.pdf")}
 

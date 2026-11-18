@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>Triple Y 用户测试报告</title>
+<style>
+@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:"Microsoft YaHei",sans-serif;color:#25243a;font-size:9.5pt;line-height:1.6;max-width:188mm;margin:0 auto}h1{font-size:28pt;line-height:1.2;margin:0 0 4mm}h2{font-size:15pt;border-bottom:2px solid #8b86e8;padding-bottom:1.5mm;margin:8mm 0 3mm;page-break-after:avoid}h3{font-size:11pt;margin:5mm 0 2mm}.cover{min-height:245mm;padding:24mm 10mm 14mm;background:#f3f1fc;position:relative;page-break-after:always}.cover:before{content:"";position:absolute;width:150mm;height:150mm;border:28mm solid #dcd7fa;border-radius:50%;right:-58mm;top:-46mm}.cover-content{position:relative;z-index:2}.kicker{font-size:9pt;letter-spacing:.14em;color:#625bcf;font-weight:800}.badge{display:inline-block;margin-top:8mm;padding:3mm 5mm;background:#e5f6eb;border:1px solid #8dcca8;border-radius:999px;color:#19633d;font-weight:800}.cover-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;margin-top:16mm;max-width:140mm}.cover-meta div{padding:4mm;background:#fff;border:1px solid #d8d3ed;border-radius:3mm}.cover-meta b{display:block;font-size:18pt;color:#594fd1}.callout{padding:4mm;border-left:4px solid #8b86e8;background:#f5f3ff;margin:4mm 0}.warn{padding:4mm;border-left:4px solid #d9b64f;background:#fff9e5;margin:4mm 0}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm}.kpi{padding:4mm;border:1px solid #ddd8ef;border-radius:3mm;background:#faf9ff}.kpi span{display:block;color:#777292;font-size:8pt}.kpi b{font-size:19pt;color:#5950ce}table{width:100%;border-collapse:collapse;margin:3mm 0;font-size:7.8pt}th,td{border:1px solid #d1cddd;padding:1.7mm;vertical-align:top}th{background:#f1eff8;text-align:left}.participant-card{page-break-before:always}.participant-head{display:grid;grid-template-columns:20mm 1fr auto;gap:4mm;align-items:center}.participant-head h2{margin:0;border:0;padding:0}.participant-head p{margin:1mm 0;color:#6c6880}.participant-head> b{font-size:10pt;color:#4f47bd}.num{display:inline-flex;justify-content:center;padding:2mm 3mm;background:#625bcf;color:#fff;border-radius:999px;font-weight:800}.observation,.issue{padding:3mm;margin:3mm 0}.observation{background:#f7f7fb;border:1px solid #e0ddeb}.issue{background:#fff8e6;border-left:4px solid #d9b64f}.meta{font-size:8pt;color:#69657e}.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-top:3mm}.gallery figure{margin:0;border:1px solid #ddd9ea;padding:1.5mm}.gallery img{width:100%;height:48mm;object-fit:contain;object-position:top;background:#f7f6fb}.gallery figcaption{font-size:7pt;color:#5c5870}.gallery figcaption span{font-size:6pt;color:#89849a;word-break:break-all}.pagebreak{page-break-before:always}.muted{color:#6e6a80;font-size:8.3pt}
+</style></head><body>
+<section class="cover"><div class="cover-content">
+<div class="kicker">TRIPLE Y · USER TESTING</div>
+<h1>用户测试报告</h1>
+<p style="font-size:15pt;color:#5e5975;margin:0 0 5mm">通知转任务网页 · 文本、图片、PDF、对比与错误状态</p>
+<div class="badge">9 位测试用户 · 18 张原始截图</div>
+<div class="cover-meta">
+<div><span>测试日期</span><b>11.18</b></div>
+<div><span>主流程成功</span><b>8 / 9</b></div>
+<div><span>测试场景</span><b>9</b></div>
+</div>
+</div></section>
+
+<h2>1. 测试范围与结论</h2>
+<div class="kpis">
+<div class="kpi"><span>测试记录</span><b>9</b></div>
+<div class="kpi"><span>截图证据</span><b>18</b></div>
+<div class="kpi"><span>解析成功</span><b>8/9</b></div>
+<div class="kpi"><span>扫描 PDF 错误</span><b>1</b></div>
+</div>
+<div class="callout"><b>主要结论：</b>文本、图片和文字型 PDF 均能生成结构化结果；图片截断时系统会要求确认；通知对比可以展示通知差异。当前主要待优化项是对比差异语义和扫描 PDF 错误后的恢复流程。</div>
+<table><thead><tr><th>测试项</th><th>覆盖次数</th><th>参与者</th><th>结果</th></tr></thead><tbody><tr><td>文字通知解析</td><td>4 次</td><td>第二、三、五、八位</td><td>全部生成结构化结果</td></tr><tr><td>图片通知解析</td><td>2 次</td><td>第一、七位</td><td>均生成结果；第七位触发疑点确认</td></tr><tr><td>文字型 PDF 解析</td><td>2 次</td><td>第四、六位</td><td>两位均生成结构化结果，第六位完成加入清单</td></tr><tr><td>扫描版 PDF</td><td>1 次</td><td>第九位</td><td>正确显示错误提示，未完成恢复</td></tr><tr><td>补充通知对比</td><td>1 次</td><td>第八位</td><td>完成差异展示，存在新增/删除语义重复</td></tr><tr><td>加入任务清单</td><td>1 次</td><td>第六位</td><td>成功加入任务清单</td></tr><tr><td>材料清单展示</td><td>7 次</td><td>第一至第六位、第八位</td><td>材料条目与原文出处可见</td></tr><tr><td>图片截断确认</td><td>1 次</td><td>第七位</td><td>系统正确停止猜测并请求确认</td></tr><tr><td>问答与导出</td><td>0 次</td><td>未提供截图</td><td>需要补测</td></tr></tbody></table>
+
+<h2>2. 数据完整性说明</h2>
+<ul>
+<li>已采集：输入通知、截图时间、设备形态、解析结果、材料、流程、错误提示和任务清单。</li>
+<li>未采集：姓名、年级、专业、经验、任务耗时、满意度、易用性和口述原话。</li>
+<li>第九位只记录到扫描 PDF 错误提示，没有恢复后的结果截图。</li>
+</ul>
+
+<h2>3. 问题与后续迭代</h2>
+<table><thead><tr><th>优先级</th><th>问题</th><th>证据</th><th>现象</th><th>建议</th></tr></thead><tbody><tr><td>P2</td><td>通知对比语义重复</td><td>第八位</td><td>部分材料同时显示“新增”和“可能删除”，用户难以判断最终保留哪一项。</td><td>区分“明确新增、明确删除、待确认变更”，并合并同一条目的差异。</td></tr><tr><td>P2</td><td>扫描 PDF 错误后的恢复链路</td><td>第九位</td><td>错误说明清楚，但截图没有展示切换截图或粘贴文字后的完成结果。</td><td>补充错误后的恢复回归测试，并记录完整闭环。</td></tr><tr><td>良好</td><td>图片截断保护</td><td>第七位</td><td>系统没有补全被截断的赛制，而是明确提示确认，降低错误解析风险。</td><td>保留该行为，并补充键盘确认和取消回归。</td></tr></tbody></table>
+
+<section class="participant-card">
+<div class="participant-head"><span class="num">第一位</span><div><h2>创新创业大赛报名</h2><p>2026-11-18 12:35 · 图片通知 · 桌面浏览器 / 图片上传</p></div><b>解析成功</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>结果包含“创新创业大赛报名通知”、2026-11-19 22:00 截止、4 步流程和报名表、学生证照片、作品说明三项材料。原文出处和处理轨迹均可展开。</div>
+<div class="issue"><b>主要发现：</b>图片上传后的多阶段处理可见，最终生成报名通知结果。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：2 张</div>
+<div class="gallery"><figure><img src="原始截图/第一位/01-创新创业大赛图片输入.png" alt="图片通知输入界面"><figcaption>图片通知输入界面<br><span>原始截图/第一位/01-创新创业大赛图片输入.png</span></figcaption></figure><figure><img src="原始截图/第一位/02-创新创业大赛解析结果.png" alt="解析结果与材料清单"><figcaption>解析结果与材料清单<br><span>原始截图/第一位/02-创新创业大赛解析结果.png</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第二位</span><div><h2>社会实践材料提交与补充通知</h2><p>2026-11-18 12:37 · 文字通知 · 桌面浏览器</p></div><b>解析成功</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>结果采用补充通知中的 2026-11-20 17:00 截止时间，生成 2 步流程，并识别实践报告和活动照片两项材料。</div>
+<div class="issue"><b>主要发现：</b>未发现阻断性问题。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：1 张</div>
+<div class="gallery"><figure><img src="原始截图/第二位/01-社会实践补充通知解析结果.png" alt="补充通知解析结果"><figcaption>补充通知解析结果<br><span>原始截图/第二位/01-社会实践补充通知解析结果.png</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第三位</span><div><h2>校园实习宣讲会报名</h2><p>2026-11-18 13:01 · 文字通知 · 桌面浏览器</p></div><b>解析成功</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>系统显示上传与读取、OCR/PDF 提取、Schema 校验、日期核对等处理阶段，随后生成 2026-11-23 17:00 截止的结果，包含 PDF 简历、学生证和现场答疑准备。</div>
+<div class="issue"><b>主要发现：</b>长文字处理期间展示了阶段进度。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：2 张</div>
+<div class="gallery"><figure><img src="原始截图/第三位/01-校园实习通知处理中.jpg" alt="长文字处理阶段"><figcaption>长文字处理阶段<br><span>原始截图/第三位/01-校园实习通知处理中.jpg</span></figcaption></figure><figure><img src="原始截图/第三位/02-校园实习通知解析结果.jpg" alt="宣讲会解析结果"><figcaption>宣讲会解析结果<br><span>原始截图/第三位/02-校园实习通知解析结果.jpg</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第四位</span><div><h2>创新创业训练计划项目申报</h2><p>2026-11-18 13:13 · 文字型 PDF · 桌面浏览器 / PDF 上传</p></div><b>解析成功</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>结果识别 2026-11-21 12:00 截止、3 步流程，并列出项目申报表、指导教师意见扫描件和项目可行性说明。</div>
+<div class="issue"><b>主要发现：</b>PDF 处理阶段可见，最终结果正常生成。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：2 张</div>
+<div class="gallery"><figure><img src="原始截图/第四位/01-创新创业PDF处理中.jpg" alt="PDF 处理阶段"><figcaption>PDF 处理阶段<br><span>原始截图/第四位/01-创新创业PDF处理中.jpg</span></figcaption></figure><figure><img src="原始截图/第四位/02-创新创业PDF解析结果.jpg" alt="项目申报解析结果"><figcaption>项目申报解析结果<br><span>原始截图/第四位/02-创新创业PDF解析结果.jpg</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第五位</span><div><h2>明日安排：班会、实践材料与线上打卡</h2><p>2026-11-18 12:36 · 长文字通知 · 桌面浏览器</p></div><b>解析成功</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>结果标题为“明日安排”，并生成参加班会、提交实践材料、完成线上打卡三步。页面能够列出通知中的三项安排，材料和原文出处也可查看。</div>
+<div class="issue"><b>主要发现：</b>三项同日事项均已生成对应步骤。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：1 张</div>
+<div class="gallery"><figure><img src="原始截图/第五位/01-明日安排解析结果.png" alt="三项同日事项解析结果"><figcaption>三项同日事项解析结果<br><span>原始截图/第五位/01-明日安排解析结果.png</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第六位</span><div><h2>毕业论文开题安排</h2><p>2026-11-18 13:02 · 文字型 PDF · 桌面浏览器 / PDF 上传</p></div><b>解析并加入清单</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>解析结果包含 4 步流程和 4 项材料。加入清单后出现开题报告、任务书、PPT、答辩顺序等任务，能够继续进行勾选和状态管理。</div>
+<div class="issue"><b>主要发现：</b>任务清单能够展开并继续管理各阶段任务。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：3 张</div>
+<div class="gallery"><figure><img src="原始截图/第六位/01-毕业论文PDF处理中.jpg" alt="毕业论文 PDF 处理阶段"><figcaption>毕业论文 PDF 处理阶段<br><span>原始截图/第六位/01-毕业论文PDF处理中.jpg</span></figcaption></figure><figure><img src="原始截图/第六位/02-毕业论文解析结果.jpg" alt="开题流程与材料结果"><figcaption>开题流程与材料结果<br><span>原始截图/第六位/02-毕业论文解析结果.jpg</span></figcaption></figure><figure><img src="原始截图/第六位/03-毕业论文任务清单.jpg" alt="加入清单后的任务列表"><figcaption>加入清单后的任务列表<br><span>原始截图/第六位/03-毕业论文任务清单.jpg</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第七位</span><div><h2>乒乓球比赛细则</h2><p>2026-11-18 12:38 · 手机截图通知 · 手机截图输入 / 桌面端图片解析</p></div><b>解析成功并触发疑点确认</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>系统识别比赛时间为 2026-10-24 14:30，并提示“已到期”。确认弹窗明确指出比赛形式部分的表格被截断，无法确认完整赛制与轮次安排。</div>
+<div class="issue"><b>主要发现：</b>截图中的对阵表被截断，系统没有猜测完整赛制，而是要求用户确认。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：3 张</div>
+<div class="gallery"><figure><img src="原始截图/第七位/01-手机端乒乓球比赛通知.jpg" alt="手机截图通知原文"><figcaption>手机截图通知原文<br><span>原始截图/第七位/01-手机端乒乓球比赛通知.jpg</span></figcaption></figure><figure><img src="原始截图/第七位/02-图片解析与疑点确认.png" alt="图片解析结果与提示"><figcaption>图片解析结果与提示<br><span>原始截图/第七位/02-图片解析与疑点确认.png</span></figcaption></figure><figure><img src="原始截图/第七位/03-确认弹窗.png" alt="疑点确认弹窗"><figcaption>疑点确认弹窗<br><span>原始截图/第七位/03-确认弹窗.png</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第八位</span><div><h2>团日活动原通知与补充通知</h2><p>2026-11-18 13:07 · 双文本对比 · 桌面浏览器</p></div><b>通知对比完成</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>完成</div>
+<div class="observation"><b>观察记录：</b>系统识别活动时间从 11 月 25 日 14:30 调整到 11 月 26 日 15:00，地点改为大学生活动中心报告厅，并新增 300 字活动心得。受影响事项和材料变化均有展示。</div>
+<div class="issue"><b>主要发现：</b>对比结果中部分材料同时出现“新增”和“可能删除”，差异语义需要进一步区分。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：3 张</div>
+<div class="gallery"><figure><img src="原始截图/第八位/01-原通知与补充通知输入.jpg" alt="原通知与补充通知输入"><figcaption>原通知与补充通知输入<br><span>原始截图/第八位/01-原通知与补充通知输入.jpg</span></figcaption></figure><figure><img src="原始截图/第八位/02-通知对比结果.jpg" alt="通知差异结果"><figcaption>通知差异结果<br><span>原始截图/第八位/02-通知对比结果.jpg</span></figcaption></figure><figure><img src="原始截图/第八位/03-原通知解析结果.jpg" alt="原通知解析结果"><figcaption>原通知解析结果<br><span>原始截图/第八位/03-原通知解析结果.jpg</span></figcaption></figure></div>
+</section><section class="participant-card">
+<div class="participant-head"><span class="num">第九位</span><div><h2>会议材料扫描件</h2><p>2026-11-18 13:02 · 扫描版 PDF · 桌面浏览器 / PDF 上传</p></div><b>未提取到文字，进入错误提示</b></div>
+<div style="padding:3mm;background:#eef8f1;border-left:4px solid #4bad76;margin:3mm 0"><b>主流程：</b>未完成</div>
+<div class="observation"><b>观察记录：</b>错误卡说明“没有从文件中提取到可识别的文字”，建议改用清晰截图或直接粘贴文字，并提供换文字、帮助和复制错误编号。错误编号为 req_aa1fc4fda1。</div>
+<div class="issue"><b>主要发现：</b>扫描 PDF 没有文本层，本次未继续完成截图转文字或重新上传的恢复流程。</div>
+<div class="meta">满意度：未采集 · 易用性：未采集 · 参与者原话：未采集 · 截图证据：1 张</div>
+<div class="gallery"><figure><img src="原始截图/第九位/01-扫描PDF错误状态.jpg" alt="扫描 PDF 错误提示"><figcaption>扫描 PDF 错误提示<br><span>原始截图/第九位/01-扫描PDF错误状态.jpg</span></figcaption></figure></div>
+</section>
+
+<div class="pagebreak"></div>
+<h2>4. 全部截图证据索引</h2>
+<table><thead><tr><th>参与者</th><th>截图文件</th></tr></thead><tbody>
+<tr><td>第一位</td><td>原始截图/第一位/01-创新创业大赛图片输入.png<br>原始截图/第一位/02-创新创业大赛解析结果.png</td></tr><tr><td>第二位</td><td>原始截图/第二位/01-社会实践补充通知解析结果.png</td></tr><tr><td>第三位</td><td>原始截图/第三位/01-校园实习通知处理中.jpg<br>原始截图/第三位/02-校园实习通知解析结果.jpg</td></tr><tr><td>第四位</td><td>原始截图/第四位/01-创新创业PDF处理中.jpg<br>原始截图/第四位/02-创新创业PDF解析结果.jpg</td></tr><tr><td>第五位</td><td>原始截图/第五位/01-明日安排解析结果.png</td></tr><tr><td>第六位</td><td>原始截图/第六位/01-毕业论文PDF处理中.jpg<br>原始截图/第六位/02-毕业论文解析结果.jpg<br>原始截图/第六位/03-毕业论文任务清单.jpg</td></tr><tr><td>第七位</td><td>原始截图/第七位/01-手机端乒乓球比赛通知.jpg<br>原始截图/第七位/02-图片解析与疑点确认.png<br>原始截图/第七位/03-确认弹窗.png</td></tr><tr><td>第八位</td><td>原始截图/第八位/01-原通知与补充通知输入.jpg<br>原始截图/第八位/02-通知对比结果.jpg<br>原始截图/第八位/03-原通知解析结果.jpg</td></tr><tr><td>第九位</td><td>原始截图/第九位/01-扫描PDF错误状态.jpg</td></tr>
+</tbody></table>
+</body></html>
